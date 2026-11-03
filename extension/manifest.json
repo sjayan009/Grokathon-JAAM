@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "SmartPath Live — Mock Extension",
-  "description": "A visible AI cursor companion for the standalone SmartPathAI learning workspace fixture.",
-  "version": "0.2.0",
+  "name": "SmartPath Live",
+  "description": "AI cursor tutor for the SmartPath study workspace: LC-3 PDF lessons, Cursor Tutor (gradient descent), PDF import, web explain, voice.",
+  "version": "0.3.0",
   "permissions": [
     "sidePanel",
     "tabs",
@@ -31,7 +31,11 @@
     "default_path": "sidepanel.html"
   },
   "action": {
-    "default_title": "Open SmartPath Live controls"
+    "default_title": "Open SmartPath Live controls",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
   },
   "commands": {
     "stop-lesson": {
@@ -58,7 +62,25 @@
       "js": [
         "content-bundle.js"
       ],
+      "run_at": "document_idle",
+      "exclude_matches": [
+        "http://localhost:5173/tutor/*",
+        "http://127.0.0.1:5173/tutor/*"
+      ]
+    },
+    {
+      "matches": [
+        "http://localhost:5173/tutor/*"
+      ],
+      "js": [
+        "tutor-content.js"
+      ],
       "run_at": "document_idle"
     }
-  ]
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
 }

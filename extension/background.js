@@ -251,3 +251,17 @@ chrome.runtime.onMessage.addListener((m,sender,send)=>{
     panel(m.ok?`● Imported ${String(m.name||'PDF').slice(0,80)}${m.pageCount?` (${m.pageCount} pages)`:''} into SmartPath Live`:'Import failed: '+String(m.error||'unknown error').slice(0,200));
   }
 });
+
+// Cursor Tutor (/tutor/) companion: tutor-content.js asks for live AI through the extension, like clicky's own worker did.
+// Same unified server as P2 (server/p2_server.py ports optional-ai-proxy's /health, /ask, /classify under /api).
+chrome.runtime.onMessage.addListener((m,sender,send)=>{
+  if(sender.id!==chrome.runtime.id||!sender.tab||!['health','ask','classify'].includes(m?.kind))return false;
+  if(!/^http:\/\/localhost:5173\/tutor\//.test(sender.tab.url||''))return false;
+  const go=m.kind==='health'
+    ?fetch(SERVER+'/api/health',{credentials:'omit'}).then(r=>r.ok?r.json():{live:false}).then(j=>({ok:true,live:j.live===true}))
+    :fetch(SERVER+'/api/'+m.kind,{method:'POST',credentials:'omit',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify(m.kind==='ask'?m.request:{text:String(m.text||'')})})
+      .then(async r=>{if(!r.ok)throw new Error(`Server returned ${r.status}`);return {ok:true,...await r.json()};});
+  go.then(send,e=>send({ok:false,error:String(e.message||e)}));
+  return true;
+});
