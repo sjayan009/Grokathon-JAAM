@@ -15,7 +15,6 @@ Shared log so every agent and teammate knows what everyone else is doing.
 | Engineer A (Extension & Cursor) | F01 unpacked MV3 + study-tab detect, F02 animated second cursor, F07 Start/Pause/Stop and override | `cursor/extension-cursor-f01-f02-f07-667e` | 2026-11-03 | 2026-11-03T01:28Z: claimed. Staying in `extension/`. Existing skeleton already handshakes `app_ready`/`extension_ready` and clicks allowlisted targets. Next: real run state machine, smooth follower, Stop that drops late actions. |
 | Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | `cursor/pdf-workspace-grounding-4015` | 2026-11-03 | Claimed. Building page-image reader, exact hotspot geometry, and `PdfViewerApi` (`scrollToAnchor`, `highlightAnchor`, `clearHighlight`, `getSelectionContext`, `getVisiblePage`). Will not change extension/, lesson copy, or graph behavior. |
 | Engineer C (AI, Evidence & Backend) | F05 selected-passage explanation; F08 text input + spoken output | `cursor/evidence-tutor-f05-f08-95f8` | 2026-11-03 | 2026-11-03T01:40Z: speech cancel hook is live in `mock-app/speech.js` (see handoff). TTS on by default; captions stay up if speech is muted or missing. Next: fixture explanations for a selected passage. |
-| Engineer D (Graph, Learning UX & QA) | F06 graph node sync; P0 §13 and §18.8 headless acceptance checks | `cursor/graph-node-sync-qa-5eab` | 2026-11-03 | 2026-11-03T01:45Z: hook is live. `window.SmartPathGraph` plus `smartpath:focus-concept`. Headless gate green (2 skips: live extension). Opening PR. Rough edges in the handoff below. |
 | Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | `cursor/pdf-workspace-grounding-4015` | 2026-11-03 | 2026-11-03: `window.PdfViewerApi` is in `mock-app/pdf-reader.js` (see `PDF_VIEWER_API.md`). One `[data-anchor-id]` per anchor; highlight box is `[data-highlight-for]`. Verified at 75/100/150% zoom and while scrolling. |
 
 ## Blocked / needs help
@@ -25,6 +24,7 @@ Shared log so every agent and teammate knows what everyone else is doing.
 ## Done
 | Who | Task | PR | Finished |
 |---|---|---|---|
+| Engineer D (Graph, Learning UX & QA) | F06 graph node sync; headless P0 / §18.8 gate | https://github.com/sjayan009/Grokathon-JAAM/pull/3 | 2026-11-03 |
 
 ## Notes / handoffs
 - **2026-11-03T01:28Z — Lane A (extension):** Will not change the fixture shape (SPEC 18.5) or the page↔extension message types (SPEC 18.6). Other lanes can keep sending `action_request` `{kind, targetId}` and reading `action_result` `{requestId, ok, error?}`. Cursor coordinates are measured from the live DOM (`data-anchor-id`, `data-concept-id`, `#top-quiz`); do not post arbitrary `viewportRect`s. Stop/Pause/Resume stay the existing `command` values (`teach`, `pause`, `resume`, `stop`, `quiz`, `ask`). Speech still starts in the mock page; the extension will cancel `speechSynthesis` synchronously on Stop so a cancelled run cannot keep talking.
