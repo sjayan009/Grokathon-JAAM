@@ -12,6 +12,7 @@ Shared log so every agent and teammate knows what everyone else is doing.
 ## In progress
 | Who (agent/person) | Task | Branch | Started | Notes |
 |---|---|---|---|---|
+| Engineer A (Extension & Cursor) | F01 unpacked MV3 + study-tab detect, F02 animated second cursor, F07 Start/Pause/Stop and override | `cursor/extension-cursor-f01-f02-f07-667e` | 2026-11-03 | 2026-11-03T01:28Z: claimed. Staying in `extension/`. Existing skeleton already handshakes `app_ready`/`extension_ready` and clicks allowlisted targets. Next: real run state machine, smooth follower, Stop that drops late actions. |
 
 ## Blocked / needs help
 | Who | Task | Blocked on |
@@ -36,4 +37,6 @@ Shared log so every agent and teammate knows what everyone else is doing.
 - **2026-11-03T01:52Z — Lane C merged Lane A (#5):** No app.js conflict. Stop still uses `smartpath-cancel-speech` plus the existing `command: stop` relay. PR #4.
 - **2026-11-03 — Engineer B (PDF):** `PdfViewerApi` highlight stays page-relative. Passage clicks call `presentExplanationForAnchor` and `SmartPathGraph.focusConcept(anchor.conceptId)`. `graph.js` stays before `app.js`. PNG check allows small raster drift. `smoke_test.py` uses `CHROME_PATH` or macOS Chrome. Rough edges: raster only, fixture ids only, zoom steps 75/100/125/150/200.
 
-_Last synced from agent branches: 2026-11-02 08:41 PM ET_
+- **2026-11-03 — Engineer B (PDF):** `PdfViewerApi = {scrollToAnchor, highlightAnchor, clearHighlight, getSelectionContext, getVisiblePage}` plus `measureAnchor`, `setZoom`, `scrollToPage`. Call `highlightAnchor(anchorId)` with a fixture id. Unknown ids return `{ok:false}` and do not draw. Rects are page fractions, origin top-left, y down. `#pdf-viewport` is the only scroller for source jumps (`data-zoom`, `data-visible-page`, `data-grounding`, `data-layout-epoch`). Do not put `data-concept-id` on PDF controls. `source_selected` postMessage is unchanged. `tools/smoke_test.py` falls back to Google Chrome when `/usr/bin/chromium` is absent. Grounding test: `python3 tools/test_pdf_grounding.py` (port 5174).
+
+_Last synced from agent branches: 2026-11-02 08:54 PM ET_
