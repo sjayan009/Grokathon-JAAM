@@ -73,6 +73,10 @@ The mock uses the project's **document/upload → graph → progress → quiz** 
 
 **Limitations:** The mock renders **raster pages**, not a general PDF.js reader. Text in the page image isn't selectable. Clicking known passage hotspots works; real arbitrary PDF uploads, text-layer selection, OCR, and robust rotation handling are future integration tasks. For production, replace the raster stage with PDF.js while preserving the same `SourceAnchor` contract. The small graph is rendered with DOM/SVG rather than the original React Flow component; replace it later without changing concept IDs.
 
+## PDF viewer API
+
+`mock-app/pdf-reader.js` exposes `window.PdfViewerApi` with `scrollToAnchor`, `highlightAnchor`, `clearHighlight`, `getSelectionContext`, and `getVisiblePage`. Highlights are page-relative, so they stay on the source rectangle at 75%, 100%, and 150% zoom and while `#pdf-viewport` scrolls. Unknown anchor ids fail closed and do not draw a box. DOM hooks and the coordinate system are documented in `mock-app/PDF_VIEWER_API.md`. Lesson code should keep using the single `[data-anchor-id]` button per anchor; the visible box is a separate `[data-highlight-for]` shape.
+
 ## What is genuine vs simulated
 
 - ✅ Actual Chrome MV3 content script and side panel; actual second cursor overlay.
@@ -101,6 +105,32 @@ The mock uses **same-window `postMessage` on the local study origin** to communi
 
 The current `postMessage` bridge is **development-only**. Scripts injected into the mock page can forge same-origin messages. Production must add a stronger session/capability handshake, verify message sender and active tab, and restrict operations to authenticated document-specific state. The extension only grants access to localhost port 5173.
 
+## Speech cancel hook (Lane A Stop)
+
+Spoken output uses the page's `speechSynthesis` from `mock-app/speech.js`. Captions stay visible even when speech is muted, unavailable, or cancelled. TTS is on by default.
+
+`speechSynthesis.cancel()` inside the extension content script does **not** stop an utterance the page started. Stop has to call the page hook. `cancel('stop')` is synchronous and latches speech: later `speak()` calls do nothing until the next user action calls `allow()`.
+
+From the page:
+
+```js
+window.SmartPathSpeech.cancel('stop');
+```
+
+From the content script, dispatch on the shared document so the page listener runs in that same call:
+
+```js
+document.dispatchEvent(new CustomEvent('smartpath-cancel-speech', {detail:{reason:'stop'}}));
+```
+
+The existing side-panel command `{type:'control', command:'stop'}` is already relayed as `{source:'smartpath-live-extension', type:'command', command:'stop'}`. `speech.js` cancels on that message. `command:'pause'` stops the current utterance and does not latch. The in-page Stop button calls `SmartPathSpeech.cancel('stop')` directly. Cancel does not clear captions.
+
+## Selected-passage explanations (F05) and text input (F08)
+
+Click a source hotspot, or type `explain this` after one is selected. The caption and the spoken line both name the page and quote the fixture passage. `explain simpler`, `explain example`, and `show relationship` use the matching fixture text. A topic that is not in the document gets an explicit “couldn't pinpoint” caption and does not draw a new highlight.
+
+Microphone denial, a missing speech engine, or muted narration leaves the text field usable. Captions still update, and spoken output stays available after a microphone failure. Explanations are loaded from `mock-app/fixtures/explanations.json` and joined to `demo.json` anchors by id. The optional Grok adapter in `mock-app/grok.js` stays off unless `window.SMARTPATH_GROK_CONFIG` is set at runtime. Do not commit that object or an API key.
+
 ## Contract for later replacing fixtures with SmartPathAI + Grok
 
 Keep these IDs and shapes stable:
@@ -124,17 +154,57 @@ The intended future data flow is `original PDF bytes -> PDF.js text layer -> PyM
 
 All four can build against `mock-app/fixtures/demo.json` immediately. First integration contract: **run `highlight_pdf → focus_graph → ask_question` using only fixture IDs**.
 
+## Graph focus hook
+
+`window.SmartPathGraph` is on the study page after `mock-app/graph.js` and `mock-app/app.js` load. Concept IDs are the fixture IDs: `memory`, `addresses`, `pointers`, `ldr`, `str`.
+
+| Method | Behavior |
+|---|---|
+| `focusConcept(conceptId, selectSource?)` | Focus that node. Pass `true` to also highlight the node's `anchorId`. An options object `{selectSource, preservePath, preserveRelated, summary}` is also accepted. Unknown IDs return `false` and leave the current focus in place. |
+| `getRelatedConceptIds(conceptId)` | Neighbor IDs across `type: "related"` edges, in either direction. Unknown IDs return `[]`. |
+| `showRelatedConcepts(conceptId)` | Focus the node and mark its related neighbors. Returns those IDs, or `null` when the id is unknown. |
+| `showPath(conceptIds \| {from, to})` | Highlight a walk that exists on `related` edges. `{from, to}` is the shortest such path. A list that skips an edge returns `null` and does not change focus. |
+| `clearFocus()` | Clear the focused node, path, and related highlighting. The nodes stay on the graph. |
+| `getFocusedConceptId()` | The focused concept ID, or `null`. |
+
+Paths are described as **related concepts, not prerequisites**. Edges of any other type are ignored.
+
+Other JavaScript worlds (including the extension content script) can drive the same hook without calling the page global:
+
+```js
+document.dispatchEvent(new CustomEvent('smartpath:focus-concept', {
+  detail: {conceptId: 'ldr', selectSource: false}
+}));
+document.dispatchEvent(new CustomEvent('smartpath:show-path', {
+  detail: {from: 'memory', to: 'ldr'}
+}));
+document.dispatchEvent(new CustomEvent('smartpath:clear-focus'));
+```
+
+Existing `focus_graph` actions still click the single `[data-concept-id="<id>"]` button. Optional same-origin messages from `source: 'smartpath-live-extension'` — `focus_concept`, `show_path`, and `clear_focus` — are additive. `action_request` / `action_result` are unchanged. `concept_focused` still includes `conceptId` and now also includes `path` (an array, empty when no path is highlighted).
+
+Clicking a passage hotspot or asking the mock to explain the selected passage focuses the anchor's `conceptId`.
+
 ## Tests
 
 For syntax and fixture sanity:
 
 ```bash
 node --check mock-app/app.js
+node --check mock-app/speech.js
+node --check mock-app/graph.js
+node tools/test_speech.js
+node tools/test_explain.js
 node --check extension/content.js
+node tools/test_graph_model.js
 python3 tools/validate_mock.py
+python3 tools/test_pdf_grounding.py
+python3 tools/acceptance_gate.py
 # Optional: recreate the bundled PDF and exact anchors
 python3 tools/generate_fixtures.py
 ```
+
+`tools/acceptance_gate.py` runs the headless P0 checks from SPEC §13 and the mock-mode gate in §18.8. It starts its own static server (port 8765 by default, or `ACCEPTANCE_PORT`). Live unpacked-extension cursor following is reported as SKIP. Playwright and Chrome or Chromium must be installed for the browser checks.
 
 For a browser smoke test, after installing Playwright and Chromium locally:
 
@@ -156,4 +226,4 @@ The smoke test starts its own local server on port 5173. Run it with that port f
 
 ## Security/privacy
 
-The fixture demo makes no remote API calls and uses no account data, credentials, cookies, unrestricted host permissions, or database writes. P2 features call OpenAI/Deepgram only through `server/p2_server.py`, only after a user action, with keys kept in the gitignored `.env.local`; extra host access and `debugger` are optional permissions requested on a click. Sample PDF is generated locally, and the app uses in-memory fixtures. The optional browser speech APIs operate only after a user action. There is no continuous recording. No `debugger` permission is required; the Chrome extension clicks approved DOM controls on the allowed local page rather than controlling arbitrary websites.
+The fixture demo makes no remote API calls and uses no account data, credentials, cookies, unrestricted host permissions, or database writes. P2 features call OpenAI/Deepgram only through `server/p2_server.py`, only after a user action, with keys kept in the gitignored `.env.local`; extra host access and `debugger` are optional permissions requested on a click. Sample PDF is generated locally, and the app uses in-memory fixtures. The optional browser speech APIs operate only after a user action. There is no continuous recording. The demo needs no `debugger` permission; the extension clicks approved DOM controls on the local page. F17's real-input mode requests `debugger` only when you enable it, and only drives an allowlist of the workspace's own controls.

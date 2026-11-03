@@ -1,12 +1,130 @@
+import { isStudyOrigin, isStudyUrl } from './lib/bridge.js';
+
+const BADGE_COLOR = '#0f766e';
+
+function enablePanel() {
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR }).catch(() => {});
+}
+
+chrome.runtime.onInstalled.addListener(enablePanel);
+chrome.runtime.onStartup.addListener(enablePanel);
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus.removeAll().then(() => chrome.contextMenus.create({ id: 'smartpath-explain', title: 'Explain in SmartPath Live', contexts: ['selection'] })).catch(console.error);
+});
+
 const MOCK=['http://localhost:5173','http://127.0.0.1:5173'], IMPORT_URL='http://localhost:5173/#import', MAX=25*1024*1024;
 const SERVER='http://localhost:5173';
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const panel=text=>chrome.runtime.sendMessage({type:'panel_status',text}).catch(()=>{});
-const setPanel=()=>chrome.sidePanel.setPanelBehavior({openPanelOnActionClick:true}).catch(console.error);
-chrome.runtime.onStartup.addListener(setPanel);
-chrome.runtime.onInstalled.addListener(()=>{
-  setPanel();
-  chrome.contextMenus.removeAll().then(()=>chrome.contextMenus.create({id:'smartpath-explain',title:'Explain in SmartPath Live',contexts:['selection']})).catch(console.error);
+
+async function remember(tabId, patch) {
+  const stored = await chrome.storage.session.get('runs');
+  const runs = { ...(stored.runs || {}) };
+  const key = String(tabId);
+  runs[key] = { ...(runs[key] || {}), ...patch, updatedAt: Date.now() };
+  await chrome.storage.session.set({ runs });
+  return runs[key];
+}
+
+async function forget(tabId) {
+  const stored = await chrome.storage.session.get('runs');
+  const runs = { ...(stored.runs || {}) };
+  delete runs[String(tabId)];
+  await chrome.storage.session.set({ runs });
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  forget(tabId).catch(() => {});
+});
+
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.status === 'loading' && tab.url && !isStudyUrl(tab.url)) {
+    chrome.action.setBadgeText({ text: '', tabId }).catch(() => {});
+    forget(tabId).catch(() => {});
+  }
+});
+
+async function forwardControl(message) {
+  if (message.command === 'stop') stopAll().catch(() => {}); // P2: cancel imports, offscreen audio, debugger
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab?.id || !isStudyUrl(tab.url || '')) {
+    return { ok: false, error: 'Open the local SmartPath study tab first' };
+  }
+  let status;
+  try {
+    status = await chrome.tabs.sendMessage(tab.id, { type: 'get_status' });
+  } catch {
+    return { ok: false, error: 'Could not connect to content script. Reload localhost:5173.' };
+  }
+  if (!status?.studyTab || !isStudyOrigin(status.origin)) {
+    return { ok: false, error: 'This tab is not the SmartPath study workspace' };
+  }
+  const stored = await chrome.storage.session.get('runs');
+  const known = stored.runs?.[String(tab.id)];
+  if (message.command !== 'stop' && known?.documentId && status.documentId && known.documentId !== status.documentId) {
+    return { ok: false, error: 'Document changed. Stop and start again.' };
+  }
+  try {
+    return await chrome.tabs.sendMessage(tab.id, {
+      type: 'control',
+      command: message.command,
+      prompt: typeof message.prompt === 'string' ? message.prompt : '',
+      tabId: tab.id,
+    });
+  } catch (error) {
+    return { ok: false, error: String(error?.message || error) };
+  }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === 'content_hello' || message?.type === 'smartpath_status') {
+    const tabId = sender.tab?.id;
+    const href = sender.tab?.url || message.href || message.state?.href || '';
+    if (!tabId || !isStudyUrl(href)) {
+      sendResponse({ ok: false, error: 'not a study tab' });
+      return undefined;
+    }
+    const origin = message.origin || message.state?.origin || '';
+    if (origin && !isStudyOrigin(origin)) {
+      sendResponse({ ok: false, error: 'origin rejected' });
+      return undefined;
+    }
+    const patch = message.type === 'content_hello'
+      ? { origin: message.origin, href, studyTab: true, phase: 'observing' }
+      : { ...(message.state || {}), href, studyTab: true };
+    remember(tabId, patch).then(() => {
+      chrome.action.setBadgeText({ text: 'ON', tabId }).catch(() => {});
+      sendResponse({ ok: true, tabId });
+    }).catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+  if (message?.type === 'get_detection') {
+    Promise.all([chrome.tabs.query({}), chrome.storage.session.get('runs')]).then(([tabs, stored]) => {
+      const runs = stored.runs || {};
+      const studyTabs = tabs.filter((tab) => isStudyUrl(tab.url || '')).map((tab) => ({
+        tabId: tab.id,
+        url: tab.url,
+        title: tab.title,
+        active: tab.active,
+        windowId: tab.windowId,
+        run: runs[String(tab.id)] || null,
+      }));
+      sendResponse({ ok: true, studyTabs });
+    }).catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+  if (message?.type === 'control_from_panel') {
+    forwardControl(message).then(sendResponse).catch((error) => sendResponse({ ok: false, error: String(error) }));
+    return true;
+  }
+  return undefined;
+});
+
+chrome.commands.onCommand.addListener((command) => {
+  const mapped = command === 'stop-lesson' ? 'stop' : command === 'pause-lesson' ? 'pause' : null;
+  if (!mapped) return;
+  forwardControl({ command: mapped, prompt: '' }).catch(() => {});
 });
 
 // ---- F16: explicit context-menu activation; activeTab grants temporary access, explain.js is never a declared content script.
@@ -115,6 +233,7 @@ async function explainAsk(m){
   }catch(err){return err.name==='AbortError'?{kind:'error',error:'The AI request timed out after 30 seconds.'}:{kind:'down'};}
   finally{clearTimeout(timer);}
 }
+// P2 messages; master's listener above owns content_hello/smartpath_status/get_detection/control_from_panel.
 chrome.runtime.onMessage.addListener((m,sender,send)=>{
   if(sender.tab&&m?.type==='explain_tts'){offscreen({type:'off_play',server:SERVER,text:String(m.text||'').slice(0,2000)}).then(send,e=>send({ok:false,error:String(e.message||e)}));return true;}
   if(sender.tab&&m?.type==='explain_tts_stop'){offscreen({type:'off_stop'}).then(send,()=>send({ok:false}));return true;}
@@ -123,7 +242,6 @@ chrome.runtime.onMessage.addListener((m,sender,send)=>{
   if(sender.tab&&m?.type==='explain_consent_set'){chrome.storage.session.get('consent').then(r=>chrome.storage.session.set({consent:{...r.consent,[senderOrigin(sender)]:true}})).then(()=>send({ok:true}),e=>send({ok:false,error:String(e)}));return true;}
   const fromPanel=!sender.tab, done=p=>p.then(send,e=>send({ok:false,error:e.message||String(e)}));
   if(fromPanel&&m?.type==='import_start'){done(startImport(String(m.url)));return true;}
-  if(fromPanel&&m?.type==='stop'){done(stopAll().then(()=>({ok:true})));return true;}
   if(fromPanel&&m?.type==='cdp_set'){done((async()=>{
     if(m.enabled&&!await chrome.permissions.contains({permissions:['debugger']}))throw new Error('debugger permission not granted');
     await chrome.storage.session.set({cdp:!!m.enabled});if(!m.enabled)await stopAll();return {ok:true};})());return true;}

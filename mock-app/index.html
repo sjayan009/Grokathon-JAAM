@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>SmartPath Live · Mock Study Workspace</title><link rel="stylesheet" href="/styles.css"/></head>
+<title>SmartPath Live · Mock Study Workspace</title><link rel="stylesheet" href="/styles.css"/><link rel="stylesheet" href="/tutor.css"/></head>
 <body>
 <div id="app">
 <header class="topbar">
@@ -27,9 +27,9 @@
   <section class="study-intro"><div><span class="eyebrow">INTERACTIVE STUDY SESSION</span><h1>Understand pointers, visually.</h1><p>The PDF is your classroom. Follow the source, explore the concept graph, and practice what you learn.</p></div><button id="start-lesson" class="primary">✧ Teach me LDR <span>→</span></button></section>
   <div class="mode-tabs"><button data-mode="teach" class="mode-tab selected">✦ Teach</button><button data-mode="explore" class="mode-tab">⌖ Explore</button><button data-mode="guide" class="mode-tab">⑂ Guide</button><span id="mode-description">Follow a narrated walkthrough of the source material.</span></div>
   <div class="study-panels">
-   <section class="pdf-panel"><div class="panel-heading"><div><span class="panel-icon">▣</span><strong>Lecture PDF</strong> <small id="page-label">Page 1 of 4</small></div><div class="reader-actions"><button id="zoom-out" aria-label="Zoom out">−</button><output id="zoom-label">85%</output><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
-    <div class="pdf-viewport" id="pdf-viewport"><div class="pdf-pages" id="pdf-pages"></div></div>
-    <div class="pdf-bottom"><div class="tiny-icon">⌘</div><span>Click a highlighted passage to explain it</span><button id="explain-sel" class="ghost small" aria-label="Explain selected text" hidden>Explain selection</button><span id="selected-page-caption">Source: ready</span></div>
+   <section class="pdf-panel"><div class="panel-heading"><div><span class="panel-icon">▣</span><strong>Lecture PDF</strong> <small id="page-label">Page 1 of 4</small></div><div class="reader-actions"><button id="page-prev" type="button" aria-label="Previous page">‹</button><button id="page-next" type="button" aria-label="Next page">›</button><button id="zoom-out" type="button" aria-label="Zoom out">−</button><output id="zoom-label">100%</output><button id="zoom-in" type="button" aria-label="Zoom in">+</button></div></div>
+    <div class="pdf-viewport" id="pdf-viewport" tabindex="0" role="region" aria-label="Lecture PDF pages" data-pdf-viewport="true" data-coordinate-origin="top-left"><div class="pdf-pages" id="pdf-pages"></div></div>
+    <div class="pdf-bottom"><div class="tiny-icon">⌘</div><span>Click a highlighted passage to explain it</span><button id="explain-sel" class="ghost small" aria-label="Explain selected text" hidden>Explain selection</button><div class="zoom-presets" role="group" aria-label="Zoom level"><button type="button" class="zoom-preset" data-zoom-preset="0.75" aria-pressed="false">75%</button><button type="button" class="zoom-preset selected" data-zoom-preset="1" aria-pressed="true">100%</button><button type="button" class="zoom-preset" data-zoom-preset="1.5" aria-pressed="false">150%</button></div><span id="selected-page-caption">Source: ready</span></div>
    </section>
    <section class="graph-panel"><div class="panel-heading"><div><span class="panel-icon">⑂</span><strong>Concept Graph</strong></div><button class="ghost small" id="reset-graph">Reset focus</button></div>
      <div class="graph-canvas" id="graph-canvas"><svg id="graph-links" class="graph-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg><div id="graph-nodes"></div></div>
@@ -40,9 +40,14 @@
  </main>
 </div>
 <div class="lesson-strip" id="lesson-strip" hidden><div class="lesson-strip-head"><b id="lesson-title">Guided lesson</b><span id="lesson-progress">0 / 6</span></div><div class="step-dots" id="step-dots"></div><div class="lesson-actions"><button id="pause-btn" class="ghost small">Pause</button><button id="resume-btn" class="ghost small" hidden>Resume</button><button id="stop-btn" class="danger small">Stop</button></div></div>
-<div class="captions" id="captions" role="status" aria-live="polite"><span class="caption-sparkle">✦</span><div><div class="caption-title" id="caption-title">Your AI study companion</div><p id="caption-text">Try “Teach me LDR from scratch” to see a guided lesson.</p></div><button id="stop-audio" hidden aria-label="Stop speaking">🔊 Speaking · Stop</button><button id="voice-toggle" title="Toggle spoken narration" aria-pressed="false">◖</button></div>
+<div class="captions" id="captions" role="status" aria-live="polite"><span class="caption-sparkle">✦</span><div><div class="caption-title" id="caption-title">Your AI study companion</div><p id="caption-text">Try “Teach me LDR from scratch” to see a guided lesson.</p></div><button id="stop-audio" hidden aria-label="Stop speaking">🔊 Speaking · Stop</button><button id="voice-toggle" title="Spoken narration on. Captions stay visible." aria-pressed="true">◖))</button></div>
 <div class="command-dock"><div class="dock-sparkle">✧</div><input id="prompt" aria-label="What do you want to learn?" placeholder="Ask to teach, explain, or review a concept…" autocomplete="off"/><button id="mic-button" title="Voice command (if supported)" aria-label="Start voice input">🎙</button><button id="send-prompt" class="send" aria-label="Submit question">↗</button></div>
 <div class="quiz-backdrop" id="quiz-backdrop" hidden><div class="quiz-card" id="quiz-card" role="dialog" aria-modal="true" aria-labelledby="quiz-title"><div class="quiz-kicker">QUICK UNDERSTANDING CHECK</div><h2 id="quiz-title">One question before we move on</h2><p id="quiz-question"></p><div class="quiz-choices" id="quiz-choices"></div><div id="quiz-feedback" class="quiz-feedback" hidden></div><button id="close-quiz" class="primary">Close check</button></div></div>
 <div class="toast" id="toast" role="alert" hidden></div>
+<script src="/explain.js" defer></script>
+<script src="/speech.js" defer></script>
+<script src="/grok.js" defer></script>
+<script src="/graph.js" defer></script>
+<script src="/pdf-reader.js" defer></script>
 <script src="/app.js" defer></script>
 </div></body></html>
