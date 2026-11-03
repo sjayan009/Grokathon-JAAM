@@ -17,7 +17,7 @@
   document.documentElement.append(host);
   const pointer=shadow.getElementById('cursor');
   const tag=shadow.getElementById('tag');
-  let state='following', last={x:50,y:80}, stopEpoch=0;
+  let state='following', last={x:50,y:80}, stopEpoch=0, cdpBusy=false, agentBusy=false, queued=null, importing=null, appReady=false;
   const origin=location.origin;
   const sayStatus=(status)=>chrome.runtime.sendMessage({type:'smartpath_status',status}).catch(()=>{});
   function move(x,y,animate){
@@ -28,7 +28,7 @@
   function setState(next){state=next;pointer.className=`cursor ${next}`;tag.textContent=next==='acting'?'AI is pointing':next==='paused'?'Paused':'SmartPath';sayStatus(next);}
   document.addEventListener('mousemove',e=>{
     if(state==='following'){last={x:e.clientX+18,y:e.clientY+15};move(last.x,last.y,false);}
-    else if(state==='acting' && e.isTrusted && e.movementX*e.movementX+e.movementY*e.movementY>18*18){
+    else if(state==='acting' && e.isTrusted && !cdpBusy && e.movementX*e.movementX+e.movementY*e.movementY>18*18){
       stopEpoch++;setState('paused');window.postMessage({source:'smartpath-live-extension',type:'command',command:'pause'},origin);
     }
   },{passive:true});
@@ -66,10 +66,48 @@
       if(state!=='paused')setState('following');
     }
   }
+  // F17 agent control: allowlisted mock controls only; each run is user-approved in the side panel. Real CDP click, then real UI-state verification.
+  const txt=id=>document.getElementById(id)?.textContent;
+  const AGENT={
+    quiz:{sel:'#top-quiz',pre:()=>0,ok:()=>document.getElementById('quiz-backdrop')?.hidden===false},
+    close_quiz:{sel:'#close-quiz',pre:()=>0,ok:()=>document.getElementById('quiz-backdrop')?.hidden===true},
+    reset:{sel:'#reset-graph',pre:()=>0,ok:()=>txt('focused-concept')==='Your learning map'},
+    zoom_in:{sel:'#zoom-in',pre:()=>txt('zoom-label'),ok:b=>txt('zoom-label')!==b},
+    zoom_out:{sel:'#zoom-out',pre:()=>txt('zoom-label'),ok:b=>txt('zoom-label')!==b}};
+  async function agentAct(id){
+    const a=AGENT[id],epoch=stopEpoch;
+    if(!Object.hasOwn(AGENT,id))throw new Error('Action is not in the allowlist');
+    if(agentBusy)throw new Error('Another action is running');
+    agentBusy=true;
+    try{
+      const m=document.querySelectorAll(a.sel);if(m.length!==1)throw new Error(`Expected exactly one target; found ${m.length}`);
+      m[0].scrollIntoView({block:'center',inline:'nearest',behavior:'smooth'});await sleep(400);
+      const r=m[0].getBoundingClientRect();
+      if(r.width<2||r.height<2||r.top>=innerHeight||r.bottom<=0||r.left>=innerWidth||r.right<=0)throw new Error('Target is not visible in the viewport');
+      if(epoch!==stopEpoch)throw new Error('Action cancelled');
+      setState('acting');move(r.left+r.width/2,r.top+r.height/2,true);await sleep(450);
+      if(epoch!==stopEpoch)throw new Error('Action cancelled');
+      const before=a.pre();cdpBusy=true;
+      let res;try{res=await chrome.runtime.sendMessage({type:'cdp_click',x:r.left+r.width/2,y:r.top+r.height/2});}finally{cdpBusy=false;}
+      if(!res?.ok)throw new Error(res?.error||'CDP click failed');
+      await sleep(150);
+      if(!a.ok(before))throw new Error('Real UI transition did not verify (control may be at its limit)');
+    }finally{agentBusy=false;if(state!=='paused'){setState('following');move(last.x,last.y,true);}}
+  }
+  // F09: payload queued until the page says app_ready (fallback timer covers app_ready firing before this script loaded).
+  const report=r=>{clearTimeout(importing?.timer);const name=importing?.name;importing=null;chrome.runtime.sendMessage({type:'import_result',name,...r}).catch(()=>{});};
+  function flush(){
+    if(!queued||!appReady||importing)return;
+    const q=queued;queued=null;
+    importing={name:q.name,timer:setTimeout(()=>report({ok:false,error:'The workspace did not respond to the import (timed out)'}),30000)};
+    window.postMessage({source:'smartpath-live-extension',type:'import_pdf',name:q.name,sourceUrl:q.sourceUrl,bytesBase64:q.bytesBase64},origin);
+  }
+  setTimeout(()=>{appReady=true;flush();},2000);
   window.addEventListener('message',event=>{
     if(event.source!==window||event.origin!==origin||!event.data||event.data.source!=='smartpath-mock-app')return;
     const d=event.data;
-    if(d.type==='app_ready')window.postMessage({source:'smartpath-live-extension',type:'extension_ready'},origin);
+    if(d.type==='app_ready'){window.postMessage({source:'smartpath-live-extension',type:'extension_ready'},origin);appReady=true;flush();}
+    else if(d.type==='import_result'){if(importing)report({ok:!!d.ok,error:typeof d.error==='string'?d.error.slice(0,200):undefined,pageCount:Number.isFinite(d.pageCount)?d.pageCount:undefined});}
     else if(d.type==='action_request')perform(d);
     else if(d.type==='lesson_stopped'){stopEpoch++;setState('following');move(last.x,last.y,true);}
     else if(d.type==='lesson_paused'){stopEpoch++;setState('paused');}
@@ -78,10 +116,20 @@
   });
   chrome.runtime.onMessage.addListener((message,sender,sendResponse)=>{
     if(message?.type==='control'&&['teach','pause','resume','stop','quiz','ask'].includes(message.command)){
-      if(message.command==='stop'){stopEpoch++;setState('following');}
+      if(message.command==='stop'){stopEpoch++;queued=null;setState('following');}
       if(message.command==='pause'){stopEpoch++;setState('paused');}
       window.postMessage({source:'smartpath-live-extension',type:'command',command:message.command,prompt:typeof message.prompt==='string'?message.prompt.slice(0,1000):''},origin);
       sendResponse({ok:true,status:state});return;
+    }
+    if(message?.type==='agent_action'){
+      agentAct(String(message.action)).then(()=>sendResponse({ok:true}),e=>sendResponse({ok:false,error:String(e.message||e)}));return true;
+    }
+    if(message?.type==='import_pdf'){
+      const b=message.bytesBase64;
+      if(typeof b!=='string'||b.length>34*1024*1024)sendResponse({ok:false,error:'Invalid or oversized PDF payload'});
+      else if(queued||importing)sendResponse({ok:false,error:'An import is already running'});
+      else{queued={name:String(message.name||'document.pdf').slice(0,120),sourceUrl:String(message.sourceUrl||'').slice(0,2000),bytesBase64:b};sendResponse({ok:true});flush();}
+      return;
     }
     if(message?.type==='get_status'){sendResponse({ok:true,status:state});return;}
   });

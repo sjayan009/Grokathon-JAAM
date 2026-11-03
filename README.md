@@ -17,6 +17,25 @@ A **self-contained, browser-based demo environment** for building the SmartPath 
 
 The demo works **without the extension** using local verified DOM interactions, but the animated AI cursor and Chrome side panel require it.
 
+## P2 features (real AI + voice)
+
+The fixture demo above needs nothing extra. The P2 features (SPEC §5: F09, F16, F17, F18) are live features backed by a small local server that keeps the API keys:
+
+```bash
+pip install -r server/requirements.txt
+cp .env.example .env.local      # then fill in OPENAI_API_KEY and DEEPGRAM_API_KEY
+python server/p2_server.py      # serves the workspace on http://localhost:5173 + /api/live/v1/p2/*
+```
+
+| Feature | How to use it | What is real |
+|---|---|---|
+| F09 Import any PDF | Sidebar **Import PDF**, or on any `.pdf` tab click **Open in SmartPath Live** in the extension side panel (asks for that site's permission once) | PDF.js rendering with selectable text; select text → **Explain selection** or type/say a question → GPT answer, spoken by Deepgram, with only quotes that literally exist on the page highlighted |
+| F16 Explain on any website | Select text → right-click → **Explain in SmartPath Live** | Popover with a GPT explanation (after a one-time per-site consent), Simpler / Example, Deepgram read-aloud. Text-only; the site is not annotated |
+| F17 Real browser input (CDP) | Side panel → enable real-input mode (Chrome shows its debugging banner) → **Agent control**, approve each action | Trusted mouse events via `chrome.debugger`, limited to an allowlist of the workspace's own controls; `debugger` is an optional permission |
+| F18 Scanned PDFs | Pages without a text layer show **Run OCR (local)** (tesseract.js in the browser) and **Read page with AI** (GPT vision) | OCR words become selectable/highlightable with confidence; AI reading gives a transcript/answer but never draws guessed source boxes |
+
+Without keys the server still runs and every P2 feature degrades to an honest "AI/voice not configured" message. Selected text, page images and voice clips go only to your local server, which forwards them to OpenAI/Deepgram. See [STATUS.md](STATUS.md) for verification details and limits.
+
 ## What's included
 
 | File | Purpose |
@@ -137,4 +156,4 @@ The smoke test starts its own local server on port 5173. Run it with that port f
 
 ## Security/privacy
 
-No remote API calls, account data, credentials, cookies, unrestricted host permissions, or database writes. Sample PDF is generated locally, and the app uses in-memory fixtures. The optional browser speech APIs operate only after a user action. There is no continuous recording. No `debugger` permission is required; the Chrome extension clicks approved DOM controls on the allowed local page rather than controlling arbitrary websites.
+The fixture demo makes no remote API calls and uses no account data, credentials, cookies, unrestricted host permissions, or database writes. P2 features call OpenAI/Deepgram only through `server/p2_server.py`, only after a user action, with keys kept in the gitignored `.env.local`; extra host access and `debugger` are optional permissions requested on a click. Sample PDF is generated locally, and the app uses in-memory fixtures. The optional browser speech APIs operate only after a user action. There is no continuous recording. No `debugger` permission is required; the Chrome extension clicks approved DOM controls on the allowed local page rather than controlling arbitrary websites.

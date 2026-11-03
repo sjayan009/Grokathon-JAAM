@@ -41,6 +41,10 @@ assert q['correctChoice'] in {a['id'] for a in q['choices']}
 manifest=json.loads((ROOT/'extension/manifest.json').read_text())
 assert manifest['manifest_version']==3
 assert 'debugger' not in manifest.get('permissions',[])
+assert manifest.get('optional_permissions')==['debugger']
+for cs in manifest['content_scripts']:
+    assert all('localhost' in m or '127.0.0.1' in m for m in cs['matches']) and 'explain.js' not in cs['js']
+assert (ROOT/'extension/explain.js').is_file()
 assert all('localhost' in h or '127.0.0.1' in h for h in manifest['host_permissions'])
 for pg in f['pages']:
  assert (app/pg['image'].lstrip('/')).is_file(),pg['image']
