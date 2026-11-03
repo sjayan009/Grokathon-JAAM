@@ -17,6 +17,10 @@ A **self-contained, browser-based demo environment** for building the SmartPath 
 
 The demo works **without the extension** using local verified DOM interactions, but the animated AI cursor and Chrome side panel require it.
 
+## Also in this repo: Cursor Tutor (TypeScript stack)
+
+`chrome-extension/`, `mock-smartpath/`, `tutor-core/` and `optional-ai-proxy/` are a separate npm-workspace demo (gradient-descent lesson with whiteboard, video and notes). See [CLICKY.md](CLICKY.md). It also uses port 5173, so run one app at a time.
+
 ## P2 features (real AI + voice)
 
 The fixture demo above needs nothing extra. The P2 features (SPEC §5: F09, F16, F17, F18) are live features backed by a small local server that keeps the API keys:

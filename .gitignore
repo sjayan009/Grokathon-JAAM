@@ -1,4 +1,11 @@
-server/.env
-__pycache__/
-.env.local
+*.log
+.DS_Store
 .env
+.env.local
+__pycache__/
+dist/
+e2e/screenshots/
+node_modules/
+playwright-report/
+server/.env
+test-results/

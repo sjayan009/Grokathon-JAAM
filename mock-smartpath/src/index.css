@@ -1,0 +1,218 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource/caveat/500.css';
+@import '@fontsource/caveat/700.css';
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+  --color-ink: #141a2e;
+  --color-ink-soft: #5c6478;
+  --color-canvas: #eef0f5;
+  --color-surface: #ffffff;
+  --color-line: #dfe2ea;
+  --color-brand: #2f4fd0;
+  --color-brand-deep: #233da6;
+  --color-marker: #ffd54a;
+  --color-good: #16845b;
+  --color-danger: #c23a3a;
+  --shadow-page: 0 1px 2px rgb(20 26 46 / 0.12), 0 8px 24px rgb(20 26 46 / 0.08);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+.toolbar-button {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-ink);
+}
+
+.toolbar-button:hover {
+  background: var(--color-canvas);
+}
+
+/* The marker paints across each line, left to right. */
+.pdf-highlight {
+  margin: -1px -2px;
+  padding: 1px 2px;
+  box-sizing: content-box;
+  background: var(--color-marker);
+  border-radius: 3px;
+  transform-origin: left center;
+  animation: marker-sweep 620ms cubic-bezier(0.3, 0, 0.2, 1) both;
+}
+
+@keyframes marker-sweep {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+.sidecar-note {
+  border-left: 3px solid var(--color-brand);
+  border-radius: 0 8px 8px 0;
+  background: #f1f4ff;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-ink);
+  box-shadow: 0 4px 14px rgb(20 26 46 / 0.12);
+  animation: note-in 280ms ease-out both;
+}
+
+.sidecar-note[data-sidecar-kind='callout'] {
+  border-left-color: var(--color-danger);
+  background: #fff3f1;
+}
+
+.sidecar-note__label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-ink-soft);
+}
+
+@keyframes note-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.split-handle {
+  width: 6px;
+  flex: none;
+  cursor: col-resize;
+  touch-action: none;
+  background: var(--color-line);
+}
+
+.split-handle--row {
+  width: auto;
+  height: 6px;
+  cursor: row-resize;
+}
+
+.split-handle:hover {
+  background: var(--color-brand);
+}
+
+.whiteboard-surface {
+  background-color: #fffefb;
+  background-image: radial-gradient(#dcdfe8 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.wb-stroke {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+}
+
+.wb-ink {
+  stroke: #27304d;
+  stroke-width: 2.5;
+}
+
+.wb-curve {
+  stroke: #2f4fd0;
+  stroke-width: 4;
+}
+
+.wb-arrow {
+  stroke: #d0433b;
+  stroke-width: 3.5;
+}
+
+.wb-hop {
+  stroke: #d0433b;
+  stroke-width: 2.5;
+}
+
+.wb-text {
+  font-family: 'Caveat', 'Bradley Hand', cursive;
+  font-size: 30px;
+  font-weight: 700;
+  fill: #27304d;
+}
+
+.wb-small {
+  font-size: 23px;
+}
+
+.wb-red {
+  fill: #d0433b;
+}
+
+.wb-muted {
+  fill: #5c6478;
+}
+
+.wb-write {
+  clip-path: inset(-20% 100% -20% -5%);
+}
+
+.wb-dot {
+  fill: #d0433b;
+  stroke: #fff;
+  stroke-width: 2.5;
+  opacity: 0;
+}
+
+.wb-ghost {
+  fill: #e9a29c;
+  opacity: 0;
+}
+
+.quiz-choice {
+  border: 1px solid var(--color-line);
+  border-radius: 8px;
+  background: var(--color-surface);
+  padding: 7px 12px;
+  font-size: 14px;
+  color: var(--color-ink);
+}
+
+.quiz-choice:not(:disabled):hover {
+  border-color: var(--color-brand);
+  background: #f1f4ff;
+}
+
+.quiz-choice[data-state='correct'] {
+  border-color: var(--color-good);
+  background: rgb(22 132 91 / 0.1);
+  color: var(--color-good);
+  font-weight: 600;
+}
+
+.quiz-choice[data-state='wrong'] {
+  border-color: var(--color-danger);
+  background: rgb(194 58 58 / 0.08);
+  color: var(--color-danger);
+}
+
+.quiz-choice[data-state='dim'] {
+  opacity: 0.55;
+}
