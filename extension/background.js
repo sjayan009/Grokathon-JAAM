@@ -215,7 +215,7 @@ async function offscreen(msg){
   return chrome.runtime.sendMessage(msg);
 }
 async function stopAll(){offscreen({type:'off_stop'}).catch(()=>{});await clearImports();await Promise.all([...attached].map(detach));}
-chrome.debugger.onDetach.addListener(s=>attached.delete(s.tabId));
+chrome.debugger?.onDetach.addListener(s=>attached.delete(s.tabId));
 chrome.tabs.onRemoved.addListener(id=>{pending.delete(id);chrome.storage.session.remove('imp_'+id).catch(()=>{});detach(id);});
 
 // ---- F16 AI: background does the fetch (no page CORS); consent is remembered per origin for this browser session.

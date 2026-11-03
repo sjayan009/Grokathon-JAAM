@@ -124,12 +124,12 @@ const cdpUi = () => {
 chrome.storage.session.get('cdp').then((r) => { cdpOn = !!r.cdp; cdpUi(); }).catch(() => {});
 $('cdp').addEventListener('click', () => {
   const want = !cdpOn;
-  (want ? chrome.permissions.request({ permissions: ['debugger'] }) : Promise.resolve(true)).then((ok) => {
+  (want ? chrome.permissions.contains({ permissions: ['debugger'] }) : Promise.resolve(true)).then((ok) => {
     if (!ok) { say('Debugger permission denied. Real-input mode stays off.'); return undefined; }
     return chrome.runtime.sendMessage({ type: 'cdp_set', enabled: want }).then((r) => {
       if (!r?.ok) { say(r?.error || 'Could not change mode'); return; }
       cdpOn = want; cdpUi(); say(want ? 'Real-input mode on (localhost mock only).' : 'Real-input mode off.');
-      if (!want) chrome.permissions.remove({ permissions: ['debugger'] }).catch(() => {});
+      
     });
   }).catch((e) => say('Could not change mode: ' + (e.message || e)));
 });

@@ -10,9 +10,7 @@
     "contextMenus",
     "activeTab",
     "scripting",
-    "offscreen"
-  ],
-  "optional_permissions": [
+    "offscreen",
     "debugger"
   ],
   "host_permissions": [
