@@ -1,0 +1,356 @@
+{
+  "schemaVersion": "mock-1",
+  "document": {
+    "id": "demo-lc3",
+    "title": "LC-3: Memory, Pointers & LDR",
+    "subject": "Computer Organization",
+    "pageCount": 4,
+    "pdfUrl": "/assets/lc3-pointers-demo.pdf",
+    "sha256": "122e6a2654f587a5bd9751a10a6ba61646c57fd515e70e4db79c6b4e7d1ecc5f"
+  },
+  "pages": [
+    {
+      "pageIndex": 0,
+      "image": "/assets/page-1.png",
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "pageIndex": 1,
+      "image": "/assets/page-2.png",
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "pageIndex": 2,
+      "image": "/assets/page-3.png",
+      "width": 612.0,
+      "height": 792.0
+    },
+    {
+      "pageIndex": 3,
+      "image": "/assets/page-4.png",
+      "width": 612.0,
+      "height": 792.0
+    }
+  ],
+  "graph": {
+    "graph_id": "graph-demo-lc3",
+    "subject": "science",
+    "nodes": [
+      {
+        "id": "memory",
+        "label": "Memory",
+        "type": "Topic",
+        "confidence": 0.86,
+        "pageIndex": 0,
+        "anchorId": "memory_definition",
+        "x": 18,
+        "y": 10
+      },
+      {
+        "id": "addresses",
+        "label": "Addresses",
+        "type": "Definition",
+        "confidence": 0.72,
+        "pageIndex": 0,
+        "anchorId": "memory_example",
+        "x": 54,
+        "y": 25
+      },
+      {
+        "id": "pointers",
+        "label": "Pointers",
+        "type": "Subtopic",
+        "confidence": 0.44,
+        "pageIndex": 1,
+        "anchorId": "pointer_definition",
+        "x": 24,
+        "y": 47
+      },
+      {
+        "id": "ldr",
+        "label": "LDR / Load",
+        "type": "Example",
+        "confidence": 0.31,
+        "pageIndex": 2,
+        "anchorId": "ldr_instruction",
+        "x": 5,
+        "y": 77
+      },
+      {
+        "id": "str",
+        "label": "STR / Store",
+        "type": "Example",
+        "confidence": 0.58,
+        "pageIndex": 3,
+        "anchorId": "str_instruction",
+        "x": 60,
+        "y": 79
+      }
+    ],
+    "relationships": [
+      {
+        "source": "memory",
+        "target": "addresses",
+        "type": "related"
+      },
+      {
+        "source": "addresses",
+        "target": "pointers",
+        "type": "related"
+      },
+      {
+        "source": "pointers",
+        "target": "ldr",
+        "type": "related"
+      },
+      {
+        "source": "pointers",
+        "target": "str",
+        "type": "related"
+      }
+    ]
+  },
+  "anchors": [
+    {
+      "id": "memory_definition",
+      "documentId": "demo-lc3",
+      "conceptId": "memory",
+      "pageIndex": 0,
+      "quote": "Every memory location has an address.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.184192,
+          "width": 0.492575,
+          "height": 0.027818
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "memory_example",
+      "documentId": "demo-lc3",
+      "conceptId": "memory",
+      "pageIndex": 0,
+      "quote": "Memory[x4000] = 7",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.683018,
+          "width": 0.22,
+          "height": 0.02608
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "pointer_definition",
+      "documentId": "demo-lc3",
+      "conceptId": "pointers",
+      "pageIndex": 1,
+      "quote": "A pointer is a value interpreted as a memory address.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.189331,
+          "width": 0.623873,
+          "height": 0.02608
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "pointer_register",
+      "documentId": "demo-lc3",
+      "conceptId": "pointers",
+      "pageIndex": 1,
+      "quote": "R2 = x4000",
+      "rects": [
+        {
+          "x": 0.094771,
+          "y": 0.31072,
+          "width": 0.110415,
+          "height": 0.022602
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "pointer_distinction",
+      "documentId": "demo-lc3",
+      "conceptId": "pointers",
+      "pageIndex": 1,
+      "quote": "R2 contains the address x4000, NOT the number 7.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.554407,
+          "width": 0.512332,
+          "height": 0.022602
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "ldr_definition",
+      "documentId": "demo-lc3",
+      "conceptId": "ldr",
+      "pageIndex": 2,
+      "quote": "LDR uses a register value to locate data in memory.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.189331,
+          "width": 0.602059,
+          "height": 0.02608
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "ldr_instruction",
+      "documentId": "demo-lc3",
+      "conceptId": "ldr",
+      "pageIndex": 2,
+      "quote": "LDR R1, R2, #0",
+      "rects": [
+        {
+          "x": 0.094771,
+          "y": 0.46476,
+          "width": 0.151093,
+          "height": 0.022602
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "ldr_result",
+      "documentId": "demo-lc3",
+      "conceptId": "ldr",
+      "pageIndex": 2,
+      "quote": "Load value at x4000 into R1 -> R1 becomes 7.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.631515,
+          "width": 0.423372,
+          "height": 0.020864
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "str_instruction",
+      "documentId": "demo-lc3",
+      "conceptId": "str",
+      "pageIndex": 3,
+      "quote": "STR R1, R2, #0",
+      "rects": [
+        {
+          "x": 0.094771,
+          "y": 0.426881,
+          "width": 0.149925,
+          "height": 0.022602
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    },
+    {
+      "id": "str_result",
+      "documentId": "demo-lc3",
+      "conceptId": "str",
+      "pageIndex": 3,
+      "quote": "Memory[x4000] becomes 9.",
+      "rects": [
+        {
+          "x": 0.084967,
+          "y": 0.603561,
+          "width": 0.2975,
+          "height": 0.024341
+        }
+      ],
+      "extractionMethod": "pdf_text",
+      "confidence": 1
+    }
+  ],
+  "quiz": {
+    "id": "q-ldr-1",
+    "conceptId": "ldr",
+    "question": "R2 contains x4000, and Memory[x4000] contains 7. What is R1 after LDR R1, R2, #0?",
+    "choices": [
+      {
+        "id": "A",
+        "text": "x4000"
+      },
+      {
+        "id": "B",
+        "text": "7"
+      },
+      {
+        "id": "C",
+        "text": "0"
+      },
+      {
+        "id": "D",
+        "text": "The program counter"
+      }
+    ],
+    "correctChoice": "B",
+    "explanation": "LDR computes x4000 + 0 and loads Memory[x4000], which is 7."
+  },
+  "lesson": {
+    "planId": "fixture-ldr-v1",
+    "documentId": "demo-lc3",
+    "intent": "teach_concept",
+    "title": "How LDR uses pointers",
+    "steps": [
+      {
+        "id": "s1",
+        "kind": "highlight_pdf",
+        "targetId": "memory_example",
+        "narration": "Start with memory. x4000 is an address; the number 7 is stored there."
+      },
+      {
+        "id": "s2",
+        "kind": "highlight_pdf",
+        "targetId": "pointer_register",
+        "narration": "R2 can hold x4000. That means it points at the memory location, not the number 7."
+      },
+      {
+        "id": "s3",
+        "kind": "focus_graph",
+        "targetId": "pointers",
+        "narration": "SmartPath links memory concepts to pointers. Let us focus that idea in the graph."
+      },
+      {
+        "id": "s4",
+        "kind": "highlight_pdf",
+        "targetId": "ldr_instruction",
+        "narration": "LDR R1, R2, #0 uses the address stored in R2, adds zero, and loads the value into R1."
+      },
+      {
+        "id": "s5",
+        "kind": "focus_graph",
+        "targetId": "ldr",
+        "narration": "The LDR node is connected to Pointers in the graph. You are ready for a quick check."
+      },
+      {
+        "id": "s6",
+        "kind": "ask_question",
+        "targetId": "quiz",
+        "narration": "Answer the question to check your understanding."
+      }
+    ]
+  }
+}

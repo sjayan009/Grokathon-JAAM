@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SmartPath Live · Mock Study Workspace</title><link rel="stylesheet" href="/styles.css"/></head>
+<body>
+<div id="app">
+<header class="topbar">
+  <div class="brand"><span class="brand-icon">✧</span><span>SmartPath<span class="brand-teal">AI</span></span><span class="live-label">LIVE</span></div>
+  <nav><button class="top-link active">Study Workspace</button><button class="top-link" id="top-quiz">Quizzes</button><button class="top-link" id="top-progress">Progress</button></nav>
+  <div class="top-actions"><span class="fixture-tag">◇ FIXTURE MODE</span><span class="avatar">SP</span></div>
+</header>
+<div class="layout">
+ <aside class="sidebar">
+  <div class="side-header">YOUR MATERIALS <span>⌄</span></div>
+  <div class="course-item selected"><span class="course-icon">▤</span><div><strong>CS 2110</strong><small>Computer Organization</small></div></div>
+  <div class="side-label">DOCUMENTS</div>
+  <button class="doc-item selected" id="open-doc"><span>▣</span><span>LC-3: Memory, Pointers & LDR<small>4 pages · Demo PDF</small></span></button>
+  <div class="sidebar-separator"></div>
+  <div class="side-label">LEARNING PROGRESS</div>
+  <div id="progress-list" class="progress-list"></div>
+  <div class="sidebar-footer"><div class="status-dot"></div><div><b>Standalone mock</b><small>No auth · No DB · No API keys</small></div></div>
+ </aside>
+ <main class="main">
+  <div class="workspace-bar"><div class="crumbs">CS 2110 <span>›</span> Documents <span>›</span> <strong>Lecture study</strong></div>
+    <div class="workspace-tools"><span id="extension-status" class="extension-status">Connecting to extension…</span><a href="/assets/lc3-pointers-demo.pdf" download title="Download the source PDF" class="ghost small">↧ Original PDF</a></div>
+  </div>
+  <section class="study-intro"><div><span class="eyebrow">INTERACTIVE STUDY SESSION</span><h1>Understand pointers, visually.</h1><p>The PDF is your classroom. Follow the source, explore the concept graph, and practice what you learn.</p></div><button id="start-lesson" class="primary">✧ Teach me LDR <span>→</span></button></section>
+  <div class="mode-tabs"><button data-mode="teach" class="mode-tab selected">✦ Teach</button><button data-mode="explore" class="mode-tab">⌖ Explore</button><button data-mode="guide" class="mode-tab">⑂ Guide</button><span id="mode-description">Follow a narrated walkthrough of the source material.</span></div>
+  <div class="study-panels">
+   <section class="pdf-panel"><div class="panel-heading"><div><span class="panel-icon">▣</span><strong>Lecture PDF</strong> <small id="page-label">Page 1 of 4</small></div><div class="reader-actions"><button id="zoom-out" aria-label="Zoom out">−</button><output id="zoom-label">85%</output><button id="zoom-in" aria-label="Zoom in">+</button></div></div>
+    <div class="pdf-viewport" id="pdf-viewport"><div class="pdf-pages" id="pdf-pages"></div></div>
+    <div class="pdf-bottom"><div class="tiny-icon">⌘</div><span>Click a highlighted passage to explain it</span><span id="selected-page-caption">Source: ready</span></div>
+   </section>
+   <section class="graph-panel"><div class="panel-heading"><div><span class="panel-icon">⑂</span><strong>Concept Graph</strong></div><button class="ghost small" id="reset-graph">Reset focus</button></div>
+     <div class="graph-canvas" id="graph-canvas"><svg id="graph-links" class="graph-links" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg><div id="graph-nodes"></div></div>
+     <div class="graph-foot"><div><strong id="focused-concept">Your learning map</strong><p id="graph-summary">Choose a node to see where it appears in the PDF.</p></div><span class="graph-key"><span></span>Live focus</span></div>
+   </section>
+  </div>
+  <div class="session-footer"><span>✦ Source-grounded learning</span><span>Demo lesson: 6 verified UI steps</span><span>Based on SmartPathAI's graph workflow</span></div>
+ </main>
+</div>
+<div class="lesson-strip" id="lesson-strip" hidden><div class="lesson-strip-head"><b id="lesson-title">Guided lesson</b><span id="lesson-progress">0 / 6</span></div><div class="step-dots" id="step-dots"></div><div class="lesson-actions"><button id="pause-btn" class="ghost small">Pause</button><button id="resume-btn" class="ghost small" hidden>Resume</button><button id="stop-btn" class="danger small">Stop</button></div></div>
+<div class="captions" id="captions" role="status" aria-live="polite"><span class="caption-sparkle">✦</span><div><div class="caption-title" id="caption-title">Your AI study companion</div><p id="caption-text">Try “Teach me LDR from scratch” to see a guided lesson.</p></div><button id="voice-toggle" title="Toggle spoken narration" aria-pressed="false">◖</button></div>
+<div class="command-dock"><div class="dock-sparkle">✧</div><input id="prompt" aria-label="What do you want to learn?" placeholder="Ask to teach, explain, or review a concept…" autocomplete="off"/><button id="mic-button" title="Voice command (if supported)" aria-label="Start voice input">🎙</button><button id="send-prompt" class="send" aria-label="Submit question">↗</button></div>
+<div class="quiz-backdrop" id="quiz-backdrop" hidden><div class="quiz-card" id="quiz-card" role="dialog" aria-modal="true" aria-labelledby="quiz-title"><div class="quiz-kicker">QUICK UNDERSTANDING CHECK</div><h2 id="quiz-title">One question before we move on</h2><p id="quiz-question"></p><div class="quiz-choices" id="quiz-choices"></div><div id="quiz-feedback" class="quiz-feedback" hidden></div><button id="close-quiz" class="primary">Close check</button></div></div>
+<div class="toast" id="toast" role="alert" hidden></div>
+<script src="/app.js" defer></script>
+</div></body></html>
