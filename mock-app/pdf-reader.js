@@ -370,6 +370,9 @@
       screenRects: measured ? measured.clientRects : []
     });
     if (typeof state.listeners.onHighlight === 'function') state.listeners.onHighlight(payload);
+    if (options.explain && anchor.conceptId && window.SmartPathGraph && typeof window.SmartPathGraph.focusConcept === 'function') {
+      window.SmartPathGraph.focusConcept(anchor.conceptId);
+    }
     return {
       ok: true,
       anchorId: anchor.id,

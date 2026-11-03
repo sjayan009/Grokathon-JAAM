@@ -6,10 +6,14 @@ from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
 
 def chromium_executable():
-    for candidate in ('/usr/bin/chromium','/usr/bin/chromium-browser','/usr/bin/google-chrome','/usr/local/bin/chrome'):
+    candidates=[]
+    if os.environ.get('CHROME_PATH'):
+        candidates.append(os.environ['CHROME_PATH'])
+    candidates+=('/usr/bin/chromium','/usr/bin/chromium-browser','/usr/bin/google-chrome','/usr/local/bin/chrome','/Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+    for candidate in candidates:
         if Path(candidate).is_file():
             return candidate
-    raise SystemExit('Chromium or Chrome is required for the smoke test')
+    raise SystemExit('Chromium or Chrome is required for the smoke test. Set CHROME_PATH if it is installed elsewhere.')
 server=subprocess.Popen([sys.executable,'-m','http.server','5173','--bind','127.0.0.1','--directory',str(ROOT/'mock-app')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
   for i in range(25):
