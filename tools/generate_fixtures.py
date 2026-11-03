@@ -115,6 +115,8 @@ for aid,concept,pageidx,quote in anchors_spec:
         rectangles=[max(rectangles, key=lambda r:r.y0)]
     else:
         rectangles=[rectangles[0]]
+    # Origin is the top-left of page.rect, y grows downward. The reader maps these
+    # fractions onto the page element; it does not store screen pixels.
     rects=[{'x':round(r.x0/pg.rect.width,6),'y':round(r.y0/pg.rect.height,6),
             'width':round(r.width/pg.rect.width,6),'height':round(r.height/pg.rect.height,6)} for r in rectangles]
     anchors.append({'id':aid,'documentId':'demo-lc3','conceptId':concept,'pageIndex':pageidx,'quote':quote,

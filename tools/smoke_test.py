@@ -4,6 +4,12 @@ import subprocess,time,urllib.request,os,sys
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 ROOT=Path(__file__).resolve().parents[1]
+
+def chromium_executable():
+    for candidate in ('/usr/bin/chromium','/usr/bin/chromium-browser','/usr/bin/google-chrome','/usr/local/bin/chrome'):
+        if Path(candidate).is_file():
+            return candidate
+    raise SystemExit('Chromium or Chrome is required for the smoke test')
 server=subprocess.Popen([sys.executable,'-m','http.server','5173','--bind','127.0.0.1','--directory',str(ROOT/'mock-app')],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 try:
   for i in range(25):
@@ -11,7 +17,7 @@ try:
       urllib.request.urlopen('http://127.0.0.1:5173/fixtures/demo.json',timeout=1);break
     except Exception: time.sleep(.15)
   with sync_playwright() as p:
-    browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox'])
+    browser=p.chromium.launch(executable_path=chromium_executable(),headless=True,args=['--no-sandbox'])
     page=browser.new_page(viewport={'width':1440,'height':900})
     errors=[]
     page.on('pageerror',lambda error: errors.append(str(error)))

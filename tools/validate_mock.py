@@ -44,4 +44,16 @@ assert 'debugger' not in manifest.get('permissions',[])
 assert all('localhost' in h or '127.0.0.1' in h for h in manifest['host_permissions'])
 for pg in f['pages']:
  assert (app/pg['image'].lstrip('/')).is_file(),pg['image']
+for i,pg in enumerate(pdf):
+    rendered=pg.get_pixmap(matrix=fitz.Matrix(1.6,1.6),alpha=False)
+    stored=fitz.Pixmap(str(app/f['pages'][i]['image'].lstrip('/')))
+    assert (stored.width,stored.height)==(rendered.width,rendered.height)==(980,1268),i
+    assert stored.samples==rendered.samples,i
+reader=(app/'pdf-reader.js').read_text()
+html=(app/'index.html').read_text()
+assert 'pdf-reader.js' in html
+for name in ('scrollToAnchor','highlightAnchor','clearHighlight','getSelectionContext','getVisiblePage'):
+    assert name in reader,name
+assert 'data-concept-id' not in reader
+assert 'data-highlight-for' in reader or 'highlightFor' in reader
 print('PASS: 4 actual PDF pages, 10 precise source anchors, 5 graph concepts, 4 real relationships, 6 lesson steps, quiz, localhost-only MV3 manifest')

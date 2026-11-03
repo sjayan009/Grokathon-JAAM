@@ -54,6 +54,10 @@ The mock uses the project's **document/upload → graph → progress → quiz** 
 
 **Limitations:** The mock renders **raster pages**, not a general PDF.js reader. Text in the page image isn't selectable. Clicking known passage hotspots works; real arbitrary PDF uploads, text-layer selection, OCR, and robust rotation handling are future integration tasks. For production, replace the raster stage with PDF.js while preserving the same `SourceAnchor` contract. The small graph is rendered with DOM/SVG rather than the original React Flow component; replace it later without changing concept IDs.
 
+## PDF viewer API
+
+`mock-app/pdf-reader.js` exposes `window.PdfViewerApi` with `scrollToAnchor`, `highlightAnchor`, `clearHighlight`, `getSelectionContext`, and `getVisiblePage`. Highlights are page-relative, so they stay on the source rectangle at 75%, 100%, and 150% zoom and while `#pdf-viewport` scrolls. Unknown anchor ids fail closed and do not draw a box. DOM hooks and the coordinate system are documented in `mock-app/PDF_VIEWER_API.md`. Lesson code should keep using the single `[data-anchor-id]` button per anchor; the visible box is a separate `[data-highlight-for]` shape.
+
 ## What is genuine vs simulated
 
 - ✅ Actual Chrome MV3 content script and side panel; actual second cursor overlay.
@@ -113,6 +117,7 @@ For syntax and fixture sanity:
 node --check mock-app/app.js
 node --check extension/content.js
 python3 tools/validate_mock.py
+python3 tools/test_pdf_grounding.py
 # Optional: recreate the bundled PDF and exact anchors
 python3 tools/generate_fixtures.py
 ```

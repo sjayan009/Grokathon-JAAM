@@ -1,7 +1,7 @@
 /* SmartPath Live mock. Uses a generated demo PDF and verified anchors, not the SmartPath backend/Grok. */
 (() => {
   const $ = (id) => document.getElementById(id);
-  const state = {fixture:null, zoom:.85, selectedAnchorId:null, selectedConceptId:null,
+  const state = {fixture:null, selectedAnchorId:null, selectedConceptId:null,
     extensionOnline:false, voice:false, mode:'teach', running:false, paused:false,
     token:0, stepIndex:0, pending:new Map(), lastEvent:null};
   const modeDescriptions = {
@@ -25,48 +25,25 @@
     speechSynthesis.speak(utt);
   }
   function cancelVoice(){if('speechSynthesis' in window)speechSynthesis.cancel();}
-  function setPageLabel() {
-    const viewport=$('pdf-viewport');const pages=[...viewport.querySelectorAll('.pdf-page-wrap')];
-    const origin=viewport.getBoundingClientRect().top+20;
-    let best=0,bestDistance=Infinity;
-    pages.forEach((el,i)=>{const distance=Math.abs(el.getBoundingClientRect().top-origin);if(distance<bestDistance){bestDistance=distance;best=i;}});
-    $('page-label').textContent=`Page ${best+1} of ${pages.length}`;
-  }
-  function renderPages(){
-    const wrap=$('pdf-pages');wrap.replaceChildren();
-    state.fixture.pages.forEach(page=>{
-      const container=document.createElement('div');container.className='pdf-page-wrap';container.id=`page-${page.pageIndex}`;
-      container.style.width=`${Math.round(612*state.zoom)}px`;
-      const image=document.createElement('img');image.src=page.image;image.alt=`Actual rendered PDF page ${page.pageIndex+1}`;
-      container.append(image);
-      anchors().filter(a=>a.pageIndex===page.pageIndex).forEach(a=>{
-        const r=a.rects[0],b=document.createElement('button');
-        b.type='button';b.className='pdf-anchor';b.dataset.anchorId=a.id;b.dataset.active=String(state.selectedAnchorId===a.id);
-        b.setAttribute('aria-label',`Highlight source passage: ${a.quote}`);
-        b.setAttribute('aria-pressed',String(state.selectedAnchorId===a.id));
-        b.style.left=`${r.x*100}%`;b.style.top=`${r.y*100}%`;
-        b.style.width=`${Math.max(r.width*100,3)}%`;b.style.height=`${Math.max(r.height*100,2)}%`;
-        if(state.selectedAnchorId===a.id)b.classList.add('active');
-        b.addEventListener('click',event=>{
-          if(event.isTrusted && state.running)pauseLesson('You interacted with the document.');
-          selectAnchor(a.id,true);
-        });container.append(b);
-      });
-      const sticker=document.createElement('span');sticker.className='page-sticker';sticker.textContent=`${page.pageIndex+1} / ${state.fixture.pages.length}`;container.append(sticker);
-      wrap.append(container);
-    });setPageLabel();
+  function syncAnchorState(detail){
+    state.selectedAnchorId=detail&&detail.anchor?detail.anchor.id:null;
+    if(!detail||detail.reason==='cleared'||!detail.anchor){
+      $('selected-page-caption').textContent=detail&&detail.ok===false?'Source: could not pinpoint':'Source: ready';
+      return;
+    }
+    const anchor=detail.anchor;
+    $('selected-page-caption').textContent=`Source: page ${anchor.pageIndex+1}`;
+    emit('source_selected',{anchorId:anchor.id,conceptId:anchor.conceptId,pageIndex:anchor.pageIndex});
   }
   function selectAnchor(id,showExplanation=false){
-    const a=findAnchor(id);if(!a)return false;
-    state.selectedAnchorId=id;
-    document.querySelectorAll('[data-anchor-id]').forEach(el=>{
-      const match=el.dataset.anchorId===id;el.classList.toggle('active',match);el.dataset.active=String(match);el.setAttribute('aria-pressed',String(match));
-    });
-    const target=document.querySelector(`[data-anchor-id="${CSS.escape(id)}"]`);
-    if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
-    $('selected-page-caption').textContent=`Source: page ${a.pageIndex+1}`;
-    if(showExplanation){caption(`Page ${a.pageIndex+1} · ${findNode(a.conceptId)?.label||'Concept'}`,a.quote);}
-    emit('source_selected',{anchorId:id,conceptId:a.conceptId,pageIndex:a.pageIndex});return true;
+    const result=window.PdfViewerApi.highlightAnchor(id,{scroll:true});
+    if(!result.ok){
+      $('selected-page-caption').textContent='Source: could not pinpoint';
+      return false;
+    }
+    const a=findAnchor(id);
+    if(showExplanation&&a)caption(`Page ${a.pageIndex+1} · ${findNode(a.conceptId)?.label||'Concept'}`,a.quote);
+    return true;
   }
   function renderGraph(){
     const canvas=$('graph-nodes');canvas.replaceChildren();const svg=$('graph-links');svg.replaceChildren();
@@ -269,7 +246,7 @@
     $('start-lesson').addEventListener('click',startLesson);
     $('top-quiz').addEventListener('click',showQuiz);
     $('top-progress').addEventListener('click',()=>handlePrompt('What should I review?'));
-    $('open-doc').addEventListener('click',()=>{state.selectedAnchorId=null;renderPages();$('pdf-viewport').scrollTop=0;});
+    $('open-doc').addEventListener('click',()=>{window.PdfViewerApi.clearHighlight();window.PdfViewerApi.scrollToPage(0,{behavior:'auto'});$('pdf-viewport').scrollTop=0;});
     $('reset-graph').addEventListener('click',()=>{state.selectedConceptId=null;renderGraph();$('focused-concept').textContent='Your learning map';$('graph-summary').textContent='Choose a node to see where it appears in the PDF.';});
     $('pause-btn').addEventListener('click',()=>pauseLesson());$('resume-btn').addEventListener('click',resumeLesson);
     $('stop-btn').addEventListener('click',stopLesson);$('close-quiz').addEventListener('click',()=>{$('quiz-backdrop').hidden=true;});
@@ -281,8 +258,6 @@
       if(state.mode==='guide')handlePrompt('What should I review?');
       else if(state.mode==='explore')caption('Explore Mode','Click a passage in the PDF to ask what it means.');
     }));
-    $('zoom-out').addEventListener('click',()=>changeZoom(-.1));$('zoom-in').addEventListener('click',()=>changeZoom(.1));
-    $('pdf-viewport').addEventListener('scroll',()=>setPageLabel(),{passive:true});
     $('pdf-viewport').addEventListener('wheel',e=>{if(e.isTrusted&&state.running)pauseLesson('You scrolled the document.');},{passive:true});
     $('voice-toggle').addEventListener('click',()=>{
       state.voice=!state.voice;$('voice-toggle').setAttribute('aria-pressed',String(state.voice));
@@ -299,14 +274,22 @@
       try{sr.start();}catch(e){toast('Could not start microphone. Use text input.');}
     });
   }
-  function changeZoom(delta){state.zoom=Math.max(.55,Math.min(1.45,Math.round((state.zoom+delta)*100)/100));$('zoom-label').textContent=`${Math.round(state.zoom*100)}%`;renderPages();if(state.selectedAnchorId)selectAnchor(state.selectedAnchorId);}
   async function init(){
     try{
       const response=await fetch('/fixtures/demo.json',{cache:'no-store'});
       if(!response.ok)throw new Error(`Fixture HTTP ${response.status}`);
       state.fixture=await response.json();
       if(!state.fixture.pages.length || !state.fixture.anchors.length)throw new Error('Mock document is incomplete');
-      renderPages();renderGraph();renderProgress();setupEvents();
+      if(!window.PdfViewerApi)throw new Error('PDF viewer API failed to load');
+      window.PdfViewerApi.mount(state.fixture,{
+        onAnchorClick(anchor,event){
+          if(event.isTrusted&&state.running)pauseLesson('You interacted with the document.');
+          selectAnchor(anchor.id,true);
+        },
+        onHighlight:syncAnchorState,
+        onGroundingFailure(){$('selected-page-caption').textContent='Source: could not pinpoint';}
+      });
+      renderGraph();renderProgress();setupEvents();
       emit('app_ready',{documentId:state.fixture.document.id});
       setTimeout(()=>{if(!state.extensionOnline){$('extension-status').textContent='Extension not detected · app-only mode';}},1200);
     }catch(error){caption('Could not load fixture',error.message);console.error(error);}
