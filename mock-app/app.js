@@ -3,14 +3,15 @@
   const $ = (id) => document.getElementById(id);
   const state = {fixture:null, zoom:.85, selectedAnchorId:null, selectedConceptId:null,
     extensionOnline:false, voice:false, mode:'teach', running:false, paused:false,
-    token:0, stepIndex:0, pending:new Map(), lastEvent:null};
+    token:0, stepIndex:0, pending:new Map(), lastEvent:null, graphUi:{pathIds:[],relatedIds:[]}};
   const modeDescriptions = {
     teach:'Follow a narrated walkthrough of the source material.',
     explore:'Click a highlighted passage, then ask for an explanation.',
     guide:'Find weaker concepts and jump to their source evidence.'
   };
-  const anchors = () => state.fixture.anchors;
-  const nodes = () => state.fixture.graph.nodes;
+  const anchors = () => state.fixture ? state.fixture.anchors : [];
+  const nodes = () => state.fixture ? state.fixture.graph.nodes : [];
+  const graphModel = () => globalThis.SmartPathGraphModel;
   const findAnchor = (id) => anchors().find(a => a.id === id);
   const findNode = (id) => nodes().find(n => n.id === id);
   const safeText = (x) => String(x == null ? '' : x);
@@ -66,7 +67,10 @@
     if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
     $('selected-page-caption').textContent=`Source: page ${a.pageIndex+1}`;
     if(showExplanation){caption(`Page ${a.pageIndex+1} · ${findNode(a.conceptId)?.label||'Concept'}`,a.quote);}
-    emit('source_selected',{anchorId:id,conceptId:a.conceptId,pageIndex:a.pageIndex});return true;
+    emit('source_selected',{anchorId:id,conceptId:a.conceptId,pageIndex:a.pageIndex});
+    // Clicking a passage focuses that anchor's concept. Keep this call if selectAnchor is replaced.
+    if(showExplanation && a.conceptId)focusConcept(a.conceptId,{selectSource:false});
+    return true;
   }
   function renderGraph(){
     const canvas=$('graph-nodes');canvas.replaceChildren();const svg=$('graph-links');svg.replaceChildren();
@@ -74,11 +78,13 @@
       const a=findNode(edge.source),b=findNode(edge.target);if(!a||!b)return;
       const line=document.createElementNS('http://www.w3.org/2000/svg','line');
       line.setAttribute('x1',a.x+12);line.setAttribute('y1',a.y+6);line.setAttribute('x2',b.x+12);line.setAttribute('y2',b.y+6);
+      line.dataset.source=edge.source;line.dataset.target=edge.target;line.dataset.relation=edge.type||'';
       svg.append(line);
     });
     nodes().forEach(n=>{
       const btn=document.createElement('button');btn.type='button';btn.className='graph-node';
-      btn.dataset.conceptId=n.id;btn.dataset.active=String(state.selectedConceptId===n.id);
+      btn.dataset.conceptId=n.id;btn.dataset.confidence=String(n.confidence);
+      btn.dataset.active=String(state.selectedConceptId===n.id);
       btn.setAttribute('aria-pressed',String(state.selectedConceptId===n.id));
       btn.style.left=`${n.x+12}%`;btn.style.top=`${n.y+6}%`;
       if(n.id===state.selectedConceptId)btn.classList.add('active');
@@ -92,22 +98,81 @@
       });
       canvas.append(btn);
     });
+    paintGraphFocus();
   }
-  function focusConcept(id,selectSource=false){
-    const n=findNode(id);if(!n)return false;state.selectedConceptId=id;
-    document.querySelectorAll('[data-concept-id]').forEach(el=>{
-      const match=el.dataset.conceptId===id;el.classList.toggle('active',match);
-      el.dataset.active=String(match);el.setAttribute('aria-pressed',String(match));
+  function paintGraphFocus(){
+    const path=state.graphUi.pathIds;const related=new Set(state.graphUi.relatedIds);
+    document.querySelectorAll('.graph-node').forEach(el=>{
+      const id=el.dataset.conceptId;const match=id===state.selectedConceptId;const pathIndex=path.indexOf(id);
+      el.classList.toggle('active',match);el.dataset.active=String(match);el.setAttribute('aria-pressed',String(match));
+      el.classList.toggle('on-path',pathIndex>=0);el.dataset.onPath=String(pathIndex>=0);
+      if(pathIndex>=0)el.dataset.pathIndex=String(pathIndex+1);else delete el.dataset.pathIndex;
+      const isRelated=related.has(id);el.classList.toggle('related',isRelated);el.dataset.related=String(isRelated);
     });
+    document.querySelectorAll('#graph-links line').forEach(line=>{
+      let onPath=false;
+      for(let i=1;i<path.length;i++){
+        const left=path[i-1],right=path[i];
+        if((line.dataset.source===left&&line.dataset.target===right)||(line.dataset.source===right&&line.dataset.target===left)){onPath=true;break;}
+      }
+      line.classList.toggle('on-path',onPath);line.dataset.onPath=String(onPath);
+    });
+  }
+  function focusOptions(selectSourceOrOptions){
+    if(typeof selectSourceOrOptions==='boolean')return {selectSource:selectSourceOrOptions};
+    return selectSourceOrOptions&&typeof selectSourceOrOptions==='object'?selectSourceOrOptions:{};
+  }
+  function focusConcept(id,selectSourceOrOptions=false){
+    const options=focusOptions(selectSourceOrOptions);const n=findNode(id);if(!n)return false;
+    if(!options.preservePath)state.graphUi.pathIds=[];
+    if(!options.preserveRelated)state.graphUi.relatedIds=[];
+    state.selectedConceptId=id;paintGraphFocus();
     $('focused-concept').textContent=n.label;
-    $('graph-summary').textContent=`${n.type} · confidence ${Math.round(n.confidence*100)}% · source page ${n.pageIndex+1}. Connected nodes are related concepts, not verified prerequisites.`;
-    if(selectSource && n.anchorId)selectAnchor(n.anchorId);
-    emit('concept_focused',{conceptId:id});return true;
+    $('graph-summary').textContent=typeof options.summary==='string'?options.summary:`${n.type} · confidence ${Math.round(n.confidence*100)}% · source page ${n.pageIndex+1}. Connected nodes are related concepts, not verified prerequisites.`;
+    if(options.selectSource && n.anchorId)selectAnchor(n.anchorId);
+    emit('concept_focused',{conceptId:id,path:state.graphUi.pathIds.slice()});return true;
+  }
+  function getRelatedConceptIds(id){
+    const model=graphModel();if(!model||!state.fixture)return [];
+    return model.relatedNeighborIds(state.fixture.graph,id);
+  }
+  function showRelatedConcepts(id){
+    const n=findNode(id);if(!n)return null;
+    const related=getRelatedConceptIds(id);
+    state.graphUi.relatedIds=related.slice();state.graphUi.pathIds=[];
+    const labels=related.map(relatedId=>findNode(relatedId)?.label||relatedId);
+    const summary=labels.length?`Related to ${labels.join(', ')}. These are related concepts, not prerequisites.`:`No related concepts are linked from ${n.label}.`;
+    if(!focusConcept(id,{selectSource:false,preserveRelated:true,summary}))return null;
+    return related.slice();
+  }
+  function showPath(request){
+    const model=graphModel();if(!model||!state.fixture)return null;
+    let ids=null;
+    if(Array.isArray(request)){if(!model.isRelatedWalk(state.fixture.graph,request))return null;ids=request.slice();}
+    else if(request&&typeof request.from==='string'&&typeof request.to==='string')ids=model.shortestRelatedPath(state.fixture.graph,request.from,request.to);
+    if(!ids||!ids.length)return null;
+    state.graphUi.pathIds=ids;state.graphUi.relatedIds=[];
+    const labels=ids.map(conceptId=>findNode(conceptId)?.label||conceptId);
+    const summary=`Related path: ${labels.join(' → ')}. These links are related concepts, not prerequisites.`;
+    if(!focusConcept(ids[ids.length-1],{selectSource:false,preservePath:true,summary}))return null;
+    return ids.slice();
+  }
+  function clearFocus(){
+    state.selectedConceptId=null;state.graphUi.pathIds=[];state.graphUi.relatedIds=[];paintGraphFocus();
+    $('focused-concept').textContent='Your learning map';
+    $('graph-summary').textContent='Choose a node to see where it appears in the PDF.';
+    emit('concept_cleared',{});
+  }
+  function installGraphStyles(){
+    if(document.getElementById('smartpath-graph-styles'))return;
+    const style=document.createElement('style');style.id='smartpath-graph-styles';
+    style.textContent='.graph-node.on-path:not(.active){border-color:#0f766e;box-shadow:0 0 0 3px #99f6e455}.graph-node.related:not(.active){border-color:#5eead4;border-style:dashed}.graph-links line.on-path{stroke:#0f766e;stroke-width:1.6}';
+    document.head.append(style);
   }
   function renderProgress(){
     const list=$('progress-list');list.replaceChildren();
     nodes().filter(n=>n.id!=='addresses').forEach(n=>{
-      const item=document.createElement('div');item.className='progress-item';
+      const item=document.createElement('div');item.className='progress-item';item.dataset.progressFor=n.id;item.dataset.confidence=String(n.confidence);
       const heading=document.createElement('div');heading.className='progress-head';
       const label=document.createElement('span');label.textContent=n.label;
       const pct=document.createElement('span');pct.textContent=`${Math.round(n.confidence*100)}%`;
@@ -117,7 +182,7 @@
     });
   }
   function showQuiz(){
-    const q=state.fixture.quiz;$('quiz-question').textContent=q.question;
+    const q=state.fixture.quiz;$('quiz-question').textContent=q.question;$('quiz-card').dataset.quizConcept=q.conceptId;
     const wrap=$('quiz-choices');wrap.replaceChildren();$('quiz-feedback').hidden=true;
     q.choices.forEach(choice=>{
       const btn=document.createElement('button');btn.type='button';btn.className='quiz-choice';btn.textContent=`${choice.id}. ${choice.text}`;
@@ -238,10 +303,20 @@
       const msg=`Your lowest-confidence concept is ${weak.label} (${Math.round(weak.confidence*100)}%). I moved to its source evidence on page ${weak.pageIndex+1}.`;
       caption('Guide Mode · Fixture recommendation',msg);speak(msg);return;
     }
+    if(/show relationship|show related|related concepts/.test(lower)){
+      const conceptId=state.selectedConceptId||findAnchor(state.selectedAnchorId||'')?.conceptId||'pointers';
+      const related=showRelatedConcepts(conceptId);const node=findNode(conceptId);
+      if(!related||!node){caption('Concept graph','That concept is not in this fixture.');return;}
+      const labels=related.map(relatedId=>findNode(relatedId)?.label||relatedId);
+      const msg=labels.length?`${node.label} is related to ${labels.join(', ')}. These links are not prerequisites.`:`${node.label} has no related concepts in this fixture.`;
+      caption('Concept graph · Related',msg);return;
+    }
     if(/explain|what does|why|how|simpler|example/.test(lower)){
       const id=state.selectedAnchorId||'ldr_instruction';selectAnchor(id);
       const example=id==='pointer_register'||id==='pointer_distinction'?'The register contains x4000, an address. To get 7, you must read Memory[x4000].':'LDR takes the base address in R2, adds the offset, then loads the value stored at that memory address.';
-      caption('Explore Mode · Fixture explanation',example);speak(example);return;
+      caption('Explore Mode · Fixture explanation',example);speak(example);
+      const conceptId=findAnchor(id)?.conceptId;if(conceptId)focusConcept(conceptId);
+      return;
     }
     caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
   }
@@ -254,6 +329,13 @@
       if(d.type==='action_result'){
         const pending=state.pending.get(d.requestId);
         if(pending){state.pending.delete(d.requestId);pending.resolve(d);}
+        return;
+      }
+      if(d.type==='focus_concept' && typeof d.conceptId==='string'){focusConcept(d.conceptId,{selectSource:d.selectSource===true});return;}
+      if(d.type==='clear_focus'){clearFocus();return;}
+      if(d.type==='show_path'){
+        if(Array.isArray(d.conceptIds))showPath(d.conceptIds);
+        else if(typeof d.from==='string'&&typeof d.to==='string')showPath({from:d.from,to:d.to});
         return;
       }
       if(d.type==='command'){
@@ -270,7 +352,7 @@
     $('top-quiz').addEventListener('click',showQuiz);
     $('top-progress').addEventListener('click',()=>handlePrompt('What should I review?'));
     $('open-doc').addEventListener('click',()=>{state.selectedAnchorId=null;renderPages();$('pdf-viewport').scrollTop=0;});
-    $('reset-graph').addEventListener('click',()=>{state.selectedConceptId=null;renderGraph();$('focused-concept').textContent='Your learning map';$('graph-summary').textContent='Choose a node to see where it appears in the PDF.';});
+    $('reset-graph').addEventListener('click',()=>clearFocus());
     $('pause-btn').addEventListener('click',()=>pauseLesson());$('resume-btn').addEventListener('click',resumeLesson);
     $('stop-btn').addEventListener('click',stopLesson);$('close-quiz').addEventListener('click',()=>{$('quiz-backdrop').hidden=true;});
     $('send-prompt').addEventListener('click',()=>handlePrompt($('prompt').value));
@@ -303,6 +385,7 @@
   async function init(){
     try{
       const response=await fetch('/fixtures/demo.json',{cache:'no-store'});
+      if(!graphModel())throw new Error('graph.js must load before app.js');
       if(!response.ok)throw new Error(`Fixture HTTP ${response.status}`);
       state.fixture=await response.json();
       if(!state.fixture.pages.length || !state.fixture.anchors.length)throw new Error('Mock document is incomplete');
@@ -311,5 +394,20 @@
       setTimeout(()=>{if(!state.extensionOnline){$('extension-status').textContent='Extension not detected · app-only mode';}},1200);
     }catch(error){caption('Could not load fixture',error.message);console.error(error);}
   }
+  document.addEventListener('smartpath:focus-concept',event=>{
+    const detail=event.detail||{};
+    if(typeof detail.conceptId==='string')focusConcept(detail.conceptId,{selectSource:detail.selectSource===true});
+  });
+  document.addEventListener('smartpath:clear-focus',()=>clearFocus());
+  document.addEventListener('smartpath:show-path',event=>{
+    const detail=event.detail||{};
+    if(Array.isArray(detail.conceptIds))showPath(detail.conceptIds);
+    else if(typeof detail.from==='string'&&typeof detail.to==='string')showPath({from:detail.from,to:detail.to});
+  });
+  installGraphStyles();
+  window.SmartPathGraph={
+    focusConcept,getRelatedConceptIds,showRelatedConcepts,showPath,clearFocus,
+    getFocusedConceptId:()=>state.selectedConceptId
+  };
   init();
 })();
