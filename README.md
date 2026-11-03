@@ -105,17 +105,53 @@ The intended future data flow is `original PDF bytes -> PDF.js text layer -> PyM
 
 All four can build against `mock-app/fixtures/demo.json` immediately. First integration contract: **run `highlight_pdf → focus_graph → ask_question` using only fixture IDs**.
 
+## Graph focus hook
+
+`window.SmartPathGraph` is on the study page after `mock-app/graph.js` and `mock-app/app.js` load. Concept IDs are the fixture IDs: `memory`, `addresses`, `pointers`, `ldr`, `str`.
+
+| Method | Behavior |
+|---|---|
+| `focusConcept(conceptId, selectSource?)` | Focus that node. Pass `true` to also highlight the node's `anchorId`. An options object `{selectSource, preservePath, preserveRelated, summary}` is also accepted. Unknown IDs return `false` and leave the current focus in place. |
+| `getRelatedConceptIds(conceptId)` | Neighbor IDs across `type: "related"` edges, in either direction. Unknown IDs return `[]`. |
+| `showRelatedConcepts(conceptId)` | Focus the node and mark its related neighbors. Returns those IDs, or `null` when the id is unknown. |
+| `showPath(conceptIds \| {from, to})` | Highlight a walk that exists on `related` edges. `{from, to}` is the shortest such path. A list that skips an edge returns `null` and does not change focus. |
+| `clearFocus()` | Clear the focused node, path, and related highlighting. The nodes stay on the graph. |
+| `getFocusedConceptId()` | The focused concept ID, or `null`. |
+
+Paths are described as **related concepts, not prerequisites**. Edges of any other type are ignored.
+
+Other JavaScript worlds (including the extension content script) can drive the same hook without calling the page global:
+
+```js
+document.dispatchEvent(new CustomEvent('smartpath:focus-concept', {
+  detail: {conceptId: 'ldr', selectSource: false}
+}));
+document.dispatchEvent(new CustomEvent('smartpath:show-path', {
+  detail: {from: 'memory', to: 'ldr'}
+}));
+document.dispatchEvent(new CustomEvent('smartpath:clear-focus'));
+```
+
+Existing `focus_graph` actions still click the single `[data-concept-id="<id>"]` button. Optional same-origin messages from `source: 'smartpath-live-extension'` — `focus_concept`, `show_path`, and `clear_focus` — are additive. `action_request` / `action_result` are unchanged. `concept_focused` still includes `conceptId` and now also includes `path` (an array, empty when no path is highlighted).
+
+Clicking a passage hotspot or asking the mock to explain the selected passage focuses the anchor's `conceptId`.
+
 ## Tests
 
 For syntax and fixture sanity:
 
 ```bash
 node --check mock-app/app.js
+node --check mock-app/graph.js
 node --check extension/content.js
+node tools/test_graph_model.js
 python3 tools/validate_mock.py
+python3 tools/acceptance_gate.py
 # Optional: recreate the bundled PDF and exact anchors
 python3 tools/generate_fixtures.py
 ```
+
+`tools/acceptance_gate.py` runs the headless P0 checks from SPEC §13 and the mock-mode gate in §18.8. It starts its own static server (port 8765 by default, or `ACCEPTANCE_PORT`). Live unpacked-extension cursor following is reported as SKIP. Playwright and Chrome or Chromium must be installed for the browser checks.
 
 For a browser smoke test, after installing Playwright and Chromium locally:
 
