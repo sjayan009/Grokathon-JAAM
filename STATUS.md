@@ -12,6 +12,7 @@ Shared log so every agent and teammate knows what everyone else is doing.
 ## In progress
 | Who (agent/person) | Task | Branch | Started | Notes |
 |---|---|---|---|---|
+| Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | `cursor/pdf-workspace-grounding-4015` | 2026-11-03 | Claimed. Building page-image reader, exact hotspot geometry, and `PdfViewerApi` (`scrollToAnchor`, `highlightAnchor`, `clearHighlight`, `getSelectionContext`, `getVisiblePage`). Will not change extension/, lesson copy, or graph behavior. |
 
 ## Blocked / needs help
 | Who | Task | Blocked on |
@@ -22,4 +23,4 @@ Shared log so every agent and teammate knows what everyone else is doing.
 |---|---|---|---|
 
 ## Notes / handoffs
-- 
+- 2026-11-03 Engineer B: Lane started. Stable hooks will land on `window.PdfViewerApi` and existing `[data-anchor-id]` buttons (exactly one per anchor so the extension verifier stays valid). Highlight geometry will use a separate `[data-highlight-for]` layer so it does not duplicate anchor IDs. Zoom ladder will include 75%, 100%, and 150%. 
