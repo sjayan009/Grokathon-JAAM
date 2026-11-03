@@ -86,6 +86,32 @@ The mock uses **same-window `postMessage` on the local study origin** to communi
 
 The current `postMessage` bridge is **development-only**. Scripts injected into the mock page can forge same-origin messages. Production must add a stronger session/capability handshake, verify message sender and active tab, and restrict operations to authenticated document-specific state. The extension only grants access to localhost port 5173.
 
+## Speech cancel hook (Lane A Stop)
+
+Spoken output uses the page's `speechSynthesis` from `mock-app/speech.js`. Captions stay visible even when speech is muted, unavailable, or cancelled. TTS is on by default.
+
+`speechSynthesis.cancel()` inside the extension content script does **not** stop an utterance the page started. Stop has to call the page hook. `cancel('stop')` is synchronous and latches speech: later `speak()` calls do nothing until the next user action calls `allow()`.
+
+From the page:
+
+```js
+window.SmartPathSpeech.cancel('stop');
+```
+
+From the content script, dispatch on the shared document so the page listener runs in that same call:
+
+```js
+document.dispatchEvent(new CustomEvent('smartpath-cancel-speech', {detail:{reason:'stop'}}));
+```
+
+The existing side-panel command `{type:'control', command:'stop'}` is already relayed as `{source:'smartpath-live-extension', type:'command', command:'stop'}`. `speech.js` cancels on that message. `command:'pause'` stops the current utterance and does not latch. The in-page Stop button calls `SmartPathSpeech.cancel('stop')` directly. Cancel does not clear captions.
+
+## Selected-passage explanations (F05) and text input (F08)
+
+Click a source hotspot, or type `explain this` after one is selected. The caption and the spoken line both name the page and quote the fixture passage. `explain simpler`, `explain example`, and `show relationship` use the matching fixture text. A topic that is not in the document gets an explicit “couldn't pinpoint” caption and does not draw a new highlight.
+
+Microphone denial, a missing speech engine, or muted narration leaves the text field usable. Captions still update, and spoken output stays available after a microphone failure. Explanations are loaded from `mock-app/fixtures/explanations.json` and joined to `demo.json` anchors by id. The optional Grok adapter in `mock-app/grok.js` stays off unless `window.SMARTPATH_GROK_CONFIG` is set at runtime. Do not commit that object or an API key.
+
 ## Contract for later replacing fixtures with SmartPathAI + Grok
 
 Keep these IDs and shapes stable:
@@ -146,7 +172,10 @@ For syntax and fixture sanity:
 
 ```bash
 node --check mock-app/app.js
+node --check mock-app/speech.js
 node --check mock-app/graph.js
+node tools/test_speech.js
+node tools/test_explain.js
 node --check extension/content.js
 node tools/test_graph_model.js
 python3 tools/validate_mock.py

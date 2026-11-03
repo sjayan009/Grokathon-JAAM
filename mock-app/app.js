@@ -2,7 +2,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {fixture:null, selectedAnchorId:null, selectedConceptId:null,
-    extensionOnline:false, voice:false, mode:'teach', running:false, paused:false,
+    extensionOnline:false, voice:true, mode:'teach', running:false, paused:false,
     token:0, stepIndex:0, pending:new Map(), lastEvent:null, graphUi:{pathIds:[],relatedIds:[]}};
   const modeDescriptions = {
     teach:'Follow a narrated walkthrough of the source material.',
@@ -20,12 +20,22 @@
   function caption(title,body) { $('caption-title').textContent=title; $('caption-text').textContent=body; }
   function toast(message) {let el=$('toast');el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,3400);}
   function speak(text) {
-    if(!state.voice || !('speechSynthesis' in window))return;
+    if (window.SmartPathSpeech) return window.SmartPathSpeech.speak(safeText(text));
+    if (!state.voice || !('speechSynthesis' in window)) return {spoken:false, reason:'unavailable'};
     speechSynthesis.cancel();
-    const utt=new SpeechSynthesisUtterance(safeText(text));utt.lang='en-US';utt.rate=1.04;utt.pitch=1;
+    const utt = new SpeechSynthesisUtterance(safeText(text));
+    utt.lang = 'en-US'; utt.rate = 1.04; utt.pitch = 1;
     speechSynthesis.speak(utt);
+    return {spoken:true, reason:'speaking'};
   }
-  function cancelVoice(){if('speechSynthesis' in window)speechSynthesis.cancel();}
+  function cancelVoice(reason) {
+    if (window.SmartPathSpeech) return window.SmartPathSpeech.cancel(reason || 'stop');
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    return {ok:true, reason: reason || 'stop'};
+  }
+  function allowSpeech(source) {
+    if (window.SmartPathSpeech) window.SmartPathSpeech.allow(source || 'user');
+  }
   function syncAnchorState(detail){
     state.selectedAnchorId=detail&&detail.anchor?detail.anchor.id:null;
     if(!detail||detail.reason==='cleared'||!detail.anchor){
@@ -43,8 +53,8 @@
       return false;
     }
     const a=findAnchor(id);
-    if(showExplanation&&a)caption(`Page ${a.pageIndex+1} · ${findNode(a.conceptId)?.label||'Concept'}`,a.quote);
     if(showExplanation && a && a.conceptId && window.SmartPathGraph)window.SmartPathGraph.focusConcept(a.conceptId);
+    if(showExplanation)presentExplanationForAnchor(id,'default');
     return true;
   }
   function renderGraph(){
@@ -180,7 +190,7 @@
   }
   function pauseLesson(reason='Paused by student'){
     if(!state.running||state.paused)return;
-    state.paused=true;cancelVoice();caption('Lesson paused',`${reason} Press Resume to revalidate and continue.`);
+    state.paused=true;cancelVoice('pause');caption('Lesson paused',`${reason} Press Resume to revalidate and continue.`);
     updateProgressIndicator();emit('lesson_paused',{reason});
   }
   function resumeLesson(){
@@ -188,7 +198,7 @@
     caption('Lesson resumed','Rechecking the current source and graph before continuing.');emit('lesson_resumed');
   }
   function stopLesson(){
-    state.token++;state.running=false;state.paused=false;cancelVoice();$('lesson-strip').hidden=true;
+    state.token++;state.running=false;state.paused=false;cancelVoice('stop');setExplainActions(false);$('lesson-strip').hidden=true;
     caption('Lesson stopped','The AI cursor, queued actions, and narration have been cancelled.');emit('lesson_stopped');
   }
   async function awaitActive(token){
@@ -227,7 +237,7 @@
   }
   async function startLesson(){
     if(state.running){toast('A lesson is already in progress.');return;}
-    state.token++;const token=state.token;state.running=true;state.paused=false;state.stepIndex=0;
+    state.token++;const token=state.token;allowSpeech('lesson');setExplainActions(false);state.running=true;state.paused=false;state.stepIndex=0;
     $('lesson-strip').hidden=false;$('lesson-title').textContent=state.fixture.lesson.title;updateProgressIndicator();
     emit('lesson_started',{runId:token,planId:state.fixture.lesson.planId});
     for(const step of state.fixture.lesson.steps){
@@ -251,7 +261,7 @@
             if(!await awaitActive(token))return;
             continue;
           }
-          state.running=false;state.paused=false;cancelVoice();updateProgressIndicator();
+          state.running=false;state.paused=false;cancelVoice('error');updateProgressIndicator();
           caption('Execution stopped safely',error.message);
           emit('lesson_error',{runId:token,stepId:step.id,error:error.message});return;
         }
@@ -265,35 +275,111 @@
     if($('quiz-backdrop').hidden)caption('Lesson complete','You can ask for another explanation or review a weak concept.');
     emit('lesson_completed',{runId:token});
   }
+  function speechGeneration(){return window.SmartPathSpeech?window.SmartPathSpeech.generation:null;}
+  function speechWasCancelled(generation){
+    if(!window.SmartPathSpeech||generation==null)return false;
+    return window.SmartPathSpeech.isStopped()||window.SmartPathSpeech.generation!==generation;
+  }
+  function setExplainActions(visible){const bar=$('caption-actions');if(bar)bar.hidden=!visible;}
+  function showExplanation(result){
+    const body=result.speechText||result.text;
+    caption(result.captionTitle,body);
+    const captions=$('captions');
+    captions.dataset.grounded=String(Boolean(result.grounded));
+    captions.dataset.explanationAnchor=result.anchorId||'';
+    setExplainActions(Boolean(result.grounded));
+    if(result.grounded&&result.anchorId){
+      selectAnchor(result.anchorId,false);
+      if(result.conceptId)focusConcept(result.conceptId,{selectSource:false});
+      const quote=result.evidence&&result.evidence[0]?result.evidence[0].quote:'';
+      $('selected-page-caption').textContent=quote?`Source: page ${result.pageIndex+1} · ${quote}`:`Source: page ${result.pageIndex+1}`;
+    }
+    const spoken=speak(body);
+    emit('explanation_presented',{grounded:Boolean(result.grounded),anchorId:result.anchorId,conceptId:result.conceptId,pageIndex:result.pageIndex,spoken:Boolean(spoken&&spoken.spoken),speechReason:spoken?spoken.reason:null,source:result.source||'fixture'});
+  }
+  async function maybeUpgradeWithGrok(result,utterance){
+    if(!result||!result.grounded)return result;
+    if(!window.SmartPathGrok||!window.SmartPathGrok.isEnabled())return result;
+    try{
+      const live=await window.SmartPathGrok.explainSelection({
+        documentId:state.fixture.document.id,
+        utterance:utterance||'',
+        anchorId:result.anchorId,
+        quote:result.evidence[0].quote,
+        pageIndex:result.pageIndex,
+        reformulation:result.reformulation
+      });
+      return window.SmartPathExplain.acceptLiveExplanation(live,state.fixture,result)||result;
+    }catch(error){return result;}
+  }
+  async function presentExplanationForAnchor(anchorId,reformulation){
+    if(!window.SmartPathExplain){caption('Explanation unavailable','The explanation planner did not load. Captions stay on this page.');return;}
+    allowSpeech('explain');
+    const generation=speechGeneration();
+    const base=window.SmartPathExplain.explainAnchor({fixture:state.fixture,anchorId,reformulation:reformulation||'default'});
+    const result=await maybeUpgradeWithGrok(base,'');
+    if(speechWasCancelled(generation))return;
+    showExplanation(result);
+  }
+  async function presentUtterance(utterance,reformulation){
+    if(!window.SmartPathExplain){caption('Explanation unavailable','The explanation planner did not load. Type a question or use Teach.');return;}
+    if(state.running)pauseLesson('You asked about a passage.');
+    allowSpeech('explain');
+    const generation=speechGeneration();
+    const base=window.SmartPathExplain.explainUtterance({fixture:state.fixture,utterance,selectedAnchorId:state.selectedAnchorId,reformulation});
+    const result=await maybeUpgradeWithGrok(base,utterance);
+    if(speechWasCancelled(generation))return;
+    showExplanation(result);
+  }
+  function routePrompt(text){
+    if(window.SmartPathExplain)return window.SmartPathExplain.classifyUtterance(text).intent;
+    const lower=text.toLowerCase();
+    if(/stop|cancel/.test(lower))return 'stop';
+    if(/pause/.test(lower))return 'pause';
+    if(/resume|continue/.test(lower))return 'resume';
+    if(/quiz|test me|check understanding/.test(lower))return 'quiz_me';
+    if(/teach|walk me|start lesson|from scratch|ldr/.test(lower)&&!/what does|why does|explain this/.test(lower))return 'teach_concept';
+    if(/review|weak|study next/.test(lower))return 'review_weaknesses';
+    if(/explain|what does|why|how|simpler|example/.test(lower))return 'explain_selection';
+    return 'unsupported';
+  }
   function handlePrompt(text){
     const q=text.trim();if(!q)return;
-    const lower=q.toLowerCase();$('prompt').value='';
-    if(/stop|cancel/.test(lower)){stopLesson();return;}
-    if(/pause/.test(lower)){pauseLesson();return;}
-    if(/resume|continue/.test(lower)){resumeLesson();return;}
-    if(/quiz|test me|check understanding/.test(lower)){showQuiz();return;}
-    if(/teach|walk me|start lesson|from scratch|ldr/.test(lower)&& !/what does|why does|explain this/.test(lower)){startLesson();return;}
-    if(/review|weak|study next/.test(lower)){
-      const weak=[...nodes()].sort((a,b)=>a.confidence-b.confidence)[0];focusConcept(weak.id,true);
-      const msg=`Your lowest-confidence concept is ${weak.label} (${Math.round(weak.confidence*100)}%). I moved to its source evidence on page ${weak.pageIndex+1}.`;
-      caption('Guide Mode · Fixture recommendation',msg);speak(msg);return;
+    state.micEpoch=(state.micEpoch||0)+1;
+    $('prompt').value='';
+    const decision=window.SmartPathExplain?window.SmartPathExplain.classifyUtterance(q):{intent:routePrompt(q),reformulation:'default'};
+    switch(decision.intent){
+      case 'stop':stopLesson();return;
+      case 'pause':pauseLesson();return;
+      case 'resume':resumeLesson();return;
+      case 'quiz_me':allowSpeech('prompt');showQuiz();return;
+      case 'teach_concept':
+      case 'teach_page':allowSpeech('prompt');startLesson();return;
+      case 'review_weaknesses':{
+        allowSpeech('prompt');
+        const weak=[...nodes()].sort((a,b)=>a.confidence-b.confidence)[0];focusConcept(weak.id,true);
+        const msg=`Your lowest-confidence concept is ${weak.label} (${Math.round(weak.confidence*100)}%). I moved to its source evidence on page ${weak.pageIndex+1}.`;
+        caption('Guide Mode · Fixture recommendation',msg);speak(msg);return;
+      }
+      case 'show_related':{
+        const conceptId=state.selectedConceptId||findAnchor(state.selectedAnchorId||'')?.conceptId||'pointers';
+        const related=showRelatedConcepts(conceptId);const node=findNode(conceptId);
+        if(!related||!node){caption('Concept graph','That concept is not in this fixture.');return;}
+        const labels=related.map(relatedId=>findNode(relatedId)?.label||relatedId);
+        const msg=labels.length?`${node.label} is related to ${labels.join(', ')}. These links are not prerequisites.`:`${node.label} has no related concepts in this fixture.`;
+        caption('Concept graph · Related',msg);return;
+      }
+      case 'explain_selection':allowSpeech('prompt');presentUtterance(q,decision.reformulation);return;
+      case 'focus_graph':
+      case 'general_question':
+      case 'unsupported':
+        caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
+        return;
+      default:{
+        caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
+        return;
+      }
     }
-    if(/show relationship|show related|related concepts/.test(lower)){
-      const conceptId=state.selectedConceptId||findAnchor(state.selectedAnchorId||'')?.conceptId||'pointers';
-      const related=showRelatedConcepts(conceptId);const node=findNode(conceptId);
-      if(!related||!node){caption('Concept graph','That concept is not in this fixture.');return;}
-      const labels=related.map(relatedId=>findNode(relatedId)?.label||relatedId);
-      const msg=labels.length?`${node.label} is related to ${labels.join(', ')}. These links are not prerequisites.`:`${node.label} has no related concepts in this fixture.`;
-      caption('Concept graph · Related',msg);return;
-    }
-    if(/explain|what does|why|how|simpler|example/.test(lower)){
-      const id=state.selectedAnchorId||'ldr_instruction';selectAnchor(id);
-      const example=id==='pointer_register'||id==='pointer_distinction'?'The register contains x4000, an address. To get 7, you must read Memory[x4000].':'LDR takes the base address in R2, adds the offset, then loads the value stored at that memory address.';
-      caption('Explore Mode · Fixture explanation',example);speak(example);
-      const conceptId=findAnchor(id)?.conceptId;if(conceptId)focusConcept(conceptId);
-      return;
-    }
-    caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
   }
   function commandMessage(event){
     if(event.source!==window || event.origin!==location.origin)return;
@@ -339,20 +425,69 @@
       else if(state.mode==='explore')caption('Explore Mode','Click a passage in the PDF to ask what it means.');
     }));
     $('pdf-viewport').addEventListener('wheel',e=>{if(e.isTrusted&&state.running)pauseLesson('You scrolled the document.');},{passive:true});
+    ensureExplainActions();
     $('voice-toggle').addEventListener('click',()=>{
-      state.voice=!state.voice;$('voice-toggle').setAttribute('aria-pressed',String(state.voice));
+      const next = window.SmartPathSpeech ? !window.SmartPathSpeech.isEnabled() : !state.voice;
+      if (window.SmartPathSpeech) window.SmartPathSpeech.setEnabled(next);
+      state.voice=next;$('voice-toggle').setAttribute('aria-pressed',String(state.voice));
       $('voice-toggle').textContent=state.voice?'◖))':'◖';
-      if(!state.voice)cancelVoice();toast(state.voice?'Speech enabled':'Speech muted');
+      $('voice-toggle').title=state.voice?'Spoken narration on. Captions stay visible.':'Spoken narration off. Captions stay visible.';
+      toast(state.voice?'Speech enabled':'Speech muted. Captions stay on.');
     });
-    $('mic-button').addEventListener('click',()=>{
-      const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!SpeechRecognition){toast('Speech recognition is not available in this browser. Use text input.');return;}
-      const sr=new SpeechRecognition();sr.lang='en-US';sr.interimResults=false;sr.maxAlternatives=1;
-      caption('Listening','Listening for one voice command…');
-      sr.onresult=e=>{const text=e.results[0][0].transcript;$('prompt').value=text;handlePrompt(text);};
-      sr.onerror=e=>toast(`Microphone unavailable: ${e.error}. Use text input.`);
-      try{sr.start();}catch(e){toast('Could not start microphone. Use text input.');}
+    $('mic-button').addEventListener('click',()=>{startMicrophone();});
+  }
+  function micFallback(message){
+    const button=$('mic-button');
+    button.dataset.micState='unavailable';
+    $('prompt').disabled=false;
+    toast(message);
+    caption('Text input ready',message);
+    $('prompt').focus();
+  }
+  async function startMicrophone(){
+    const epoch=state.micEpoch||0;
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    const fail=(message)=>{if((state.micEpoch||0)===epoch)micFallback(message);};
+    if(!SpeechRecognition){fail('Speech recognition is not available. Type your question. Spoken explanations still play.');return;}
+    try{
+      if(navigator.permissions&&navigator.permissions.query){
+        const perm=await navigator.permissions.query({name:'microphone'});
+        if(perm.state==='denied'){fail('Microphone permission is blocked. Type your question. Spoken explanations still play.');return;}
+      }
+    }catch(error){/* Some browsers reject the microphone permission name. Recognition still reports denial. */}
+    if((state.micEpoch||0)!==epoch)return;
+    const sr=new SpeechRecognition();sr.lang='en-US';sr.interimResults=false;sr.maxAlternatives=1;
+    $('mic-button').dataset.micState='listening';
+    caption('Listening','Listening for one voice command. Text input still works if this fails.');
+    sr.onresult=event=>{
+      $('mic-button').dataset.micState='idle';
+      const text=event.results[0][0].transcript;$('prompt').value=text;handlePrompt(text);
+    };
+    sr.onerror=event=>{
+      $('mic-button').dataset.micState='denied';
+      const denied=event.error==='not-allowed'||event.error==='service-not-allowed'||event.error==='audio-capture';
+      fail(denied?'Microphone permission failed. Type your question. Spoken explanations still play.':`Microphone unavailable (${event.error}). Type your question. Spoken explanations still play.`);
+    };
+    try{sr.start();}catch(error){fail('Could not start the microphone. Type your question. Spoken explanations still play.');}
+  }
+  function ensureExplainActions(){
+    if($('caption-actions'))return;
+    const host=$('caption-text').parentElement;
+    const bar=document.createElement('div');bar.id='caption-actions';bar.hidden=true;
+    [['simpler','Simpler'],['example','Example'],['relationship','Relationship']].forEach(([id,label])=>{
+      const button=document.createElement('button');button.type='button';button.dataset.reformulation=id;button.textContent=label;
+      button.addEventListener('click',()=>{if(state.selectedAnchorId)presentExplanationForAnchor(state.selectedAnchorId,id);});
+      bar.append(button);
     });
+    host.append(bar);
+  }
+  async function attachExplanations(fixture){
+    if(fixture.explanations&&fixture.explanations.passages)return;
+    const response=await fetch('/fixtures/explanations.json',{cache:'no-store'});
+    if(!response.ok)throw new Error(`Explanation fixture HTTP ${response.status}`);
+    const explanations=await response.json();
+    if(explanations.documentId!==fixture.document.id)throw new Error('Explanation fixture document does not match');
+    fixture.explanations=explanations;
   }
   async function init(){
     try{
@@ -361,11 +496,15 @@
       if(!response.ok)throw new Error(`Fixture HTTP ${response.status}`);
       state.fixture=await response.json();
       if(!state.fixture.pages.length || !state.fixture.anchors.length)throw new Error('Mock document is incomplete');
+      try{await attachExplanations(state.fixture);}catch(error){console.error(error);caption('Explanations unavailable',error.message);}
       if(!window.PdfViewerApi)throw new Error('PDF viewer API failed to load');
       window.PdfViewerApi.mount(state.fixture,{
         onAnchorClick(anchor,event){
-          if(event.isTrusted&&state.running)pauseLesson('You interacted with the document.');
-          selectAnchor(anchor.id,true);
+          const user=event.isTrusted;
+          if(user&&state.running){pauseLesson('You interacted with the document.');selectAnchor(anchor.id,false);return;}
+          selectAnchor(anchor.id,false);
+          if(anchor.conceptId&&window.SmartPathGraph)window.SmartPathGraph.focusConcept(anchor.conceptId);
+          if(user)presentExplanationForAnchor(anchor.id,'default');
         },
         onHighlight:syncAnchorState,
         onGroundingFailure(){$('selected-page-caption').textContent='Source: could not pinpoint';}

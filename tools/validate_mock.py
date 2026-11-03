@@ -67,9 +67,28 @@ for i,pg in enumerate(pdf):
     assert rasters_close(stored, rendered),(i,'page image drifted from the PDF raster')
 reader=(app/'pdf-reader.js').read_text()
 html=(app/'index.html').read_text()
-assert 'pdf-reader.js' in html
+assert 'pdf-reader.js' in html and '/speech.js' in html and '/explain.js' in html and '/grok.js' in html and '/graph.js' in html
+assert html.find('/graph.js')<html.find('/app.js')
 for name in ('scrollToAnchor','highlightAnchor','clearHighlight','getSelectionContext','getVisiblePage'):
     assert name in reader,name
 assert 'data-concept-id' not in reader
 assert 'data-highlight-for' in reader or 'highlightFor' in reader
-print('PASS: 4 actual PDF pages, 10 precise source anchors, 5 graph concepts, 4 real relationships, 6 lesson steps, quiz, localhost-only MV3 manifest')
+explanations=json.loads((app/'fixtures'/'explanations.json').read_text())
+assert explanations['schemaVersion']=='explain-1'
+assert explanations['documentId']==f['document']['id']
+assert set(explanations['passages'])==ids
+for anchor in f['anchors']:
+    passage=explanations['passages'][anchor['id']]
+    assert 'rects' not in passage
+    for variant in ('default','simpler','example','relationship'):
+        text=passage[variant]
+        assert isinstance(text,str) and anchor['quote'] in text
+        assert 'prerequisite' not in text.lower()
+    for alias in passage.get('aliases',[]):
+        assert isinstance(alias,str) and len(alias)>=6
+speech=(app/'speech.js').read_text()
+assert 'smartpath-cancel-speech' in speech and "why === 'stop'" in speech
+grok=(app/'grok.js').read_text()
+assert 'SMARTPATH_GROK_CONFIG' in grok
+assert 'xai-' not in grok and 'sk-' not in grok
+print('PASS: 4 actual PDF pages, 10 precise source anchors, 5 graph concepts, 4 real relationships, 6 lesson steps, quiz, grounded explanation fixture, localhost-only MV3 manifest')

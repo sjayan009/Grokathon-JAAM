@@ -1,0 +1,13 @@
+#caption-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+#caption-actions[hidden] { display: none !important; }
+#caption-actions button {
+  border: 0;
+  background: #1d4f63;
+  color: #d8fff6;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+#caption-actions button:focus-visible { outline: 3px solid #5eead4; outline-offset: 2px; }
+.captions { flex-wrap: wrap; }
