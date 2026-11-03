@@ -1,9 +1,52 @@
-<!doctype html><html><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><title>SmartPath Live</title>
-<style>:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#102136;color:#eefcf9;font-family:Inter,system-ui,sans-serif;padding:23px}header{display:flex;align-items:center;gap:9px;font-weight:800;font-size:20px}.sparkle{width:36px;height:36px;background:linear-gradient(120deg,#14b8a6,#0f766e);border-radius:10px;display:grid;place-items:center;font-size:23px}.live{font-size:10px;color:#5eead4;letter-spacing:1px;border:1px solid #0d9488;border-radius:6px;padding:4px 6px}p{color:#9fb6c6;font-size:13px;line-height:1.6}.badge{font-size:11px;color:#5eead4;background:#1c3f49;padding:8px 11px;border-radius:8px;margin:21px 0}label{font-size:11px;font-weight:800;color:#93aaba;display:block;margin-bottom:7px}textarea{width:100%;border:1px solid #345568;background:#19384e;border-radius:12px;color:#fff;resize:vertical;min-height:92px;padding:12px;font:13px system-ui;outline:none}textarea:focus{border-color:#2dd4bf}.controls{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}button{border-radius:9px;border:1px solid #375a6c;background:#1d384d;color:#ddf5ef;padding:11px 8px;font-weight:700;font-size:12px;cursor:pointer}button.primary{grid-column:span 2;border:0;background:linear-gradient(120deg,#14b8a6,#0f766e);color:#fff}button.stop{color:#fecaca;border-color:#7f4148}.line{height:1px;background:#2b4658;margin:26px 0}.hint{font-size:11px;color:#91a8bb;line-height:1.7}kbd{border:1px solid #405d6d;background:#193348;border-radius:5px;padding:2px 5px}#status{padding:6px 8px;border-radius:6px;font-size:11px;background:#1c3e49}#log{font-size:11px;color:#afc7d1;white-space:pre-wrap;line-height:1.5}</style></head><body>
-<header><span class="sparkle">✧</span>SmartPath <span class="live">LIVE</span></header>
-<p>An AI cursor that teaches directly in your PDF and concept graph. This local mock uses a predefined lesson, not live Grok.</p>
-<div class="badge" id="status">Checking active study tab…</div>
-<label for="prompt">VOICE OR TEXT COMMAND</label><textarea id="prompt">Teach me LDR from scratch</textarea>
-<div class="controls"><button id="submit" class="primary">✦ Send to Study Workspace</button><button id="teach">▶ Teach Demo</button><button id="quiz">◈ Quiz</button><button id="pause">Ⅱ Pause</button><button id="resume">▷ Resume</button><button id="stop" class="stop" style="grid-column:span 2">■ Stop</button></div>
-<div class="line"></div><p class="hint">Open <kbd>localhost:5173</kbd> and click the extension icon. The cursor acts only on the local mock. No account, database, or backend is needed.</p><p id="log"></p>
-<script src="sidepanel.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>SmartPath Live</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #102136; color: #eefcf9; font-family: Inter, system-ui, sans-serif; padding: 23px; }
+    header { display: flex; align-items: center; gap: 9px; font-weight: 800; font-size: 20px; }
+    .sparkle { width: 36px; height: 36px; background: linear-gradient(120deg, #14b8a6, #0f766e); border-radius: 10px; display: grid; place-items: center; font-size: 23px; }
+    .live { font-size: 10px; color: #5eead4; letter-spacing: 1px; border: 1px solid #0d9488; border-radius: 6px; padding: 4px 6px; }
+    p { color: #9fb6c6; font-size: 13px; line-height: 1.6; }
+    .badge, .phase { font-size: 12px; color: #5eead4; background: #1c3f49; padding: 8px 11px; border-radius: 8px; }
+    .badge { margin: 21px 0 8px; }
+    .phase { margin: 0 0 16px; color: #d8fff6; }
+    label { font-size: 11px; font-weight: 800; color: #93aaba; display: block; margin-bottom: 7px; }
+    textarea { width: 100%; border: 1px solid #345568; background: #19384e; border-radius: 12px; color: #fff; resize: vertical; min-height: 92px; padding: 12px; font: 13px system-ui; outline: none; }
+    textarea:focus { border-color: #2dd4bf; }
+    .controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    button { border-radius: 9px; border: 1px solid #375a6c; background: #1d384d; color: #ddf5ef; padding: 11px 8px; font-weight: 700; font-size: 12px; cursor: pointer; }
+    button:focus-visible { outline: 3px solid #5eead4; outline-offset: 2px; }
+    button.primary { grid-column: span 2; border: 0; background: linear-gradient(120deg, #14b8a6, #0f766e); color: #fff; }
+    button.stop { color: #fecaca; border-color: #7f4148; }
+    .line { height: 1px; background: #2b4658; margin: 26px 0; }
+    .hint { font-size: 11px; color: #91a8bb; line-height: 1.7; }
+    kbd { border: 1px solid #405d6d; background: #193348; border-radius: 5px; padding: 2px 5px; }
+    #log { font-size: 11px; color: #afc7d1; white-space: pre-wrap; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <header><span class="sparkle" aria-hidden="true">✧</span>SmartPath <span class="live">LIVE</span></header>
+  <p>An AI cursor that teaches directly in your PDF and concept graph. This local mock uses a predefined lesson, not live Grok.</p>
+  <div class="badge" id="status" role="status" aria-live="polite">Checking active study tab…</div>
+  <div class="phase" id="phase" role="status" aria-live="polite">Cursor following · idle</div>
+  <label for="prompt">VOICE OR TEXT COMMAND</label>
+  <textarea id="prompt">Teach me LDR from scratch</textarea>
+  <div class="controls">
+    <button id="submit" class="primary" type="button">Start from text</button>
+    <button id="teach" type="button" aria-label="Start lesson">Start lesson</button>
+    <button id="quiz" type="button">Quiz</button>
+    <button id="pause" type="button" aria-keyshortcuts="Control+Shift+Comma">Pause</button>
+    <button id="resume" type="button">Resume</button>
+    <button id="stop" class="stop" type="button" style="grid-column:span 2" aria-keyshortcuts="Control+Shift+Period">Stop</button>
+  </div>
+  <div class="line"></div>
+  <p class="hint">Open <kbd>localhost:5173</kbd> and click the extension icon. Stop cancels the pointer and speech. Keyboard: <kbd>Ctrl+Shift+.</kbd> stop, <kbd>Ctrl+Shift+,</kbd> pause, <kbd>Esc</kbd> on the study page stops a running lesson.</p>
+  <p id="log" role="status" aria-live="polite"></p>
+  <script src="sidepanel.js"></script>
+</body>
+</html>
