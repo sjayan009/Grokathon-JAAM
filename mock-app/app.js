@@ -2,7 +2,7 @@
 (() => {
   const $ = (id) => document.getElementById(id);
   const state = {fixture:null, zoom:.85, selectedAnchorId:null, selectedConceptId:null,
-    extensionOnline:false, voice:false, mode:'teach', running:false, paused:false,
+    extensionOnline:false, voice:true, mode:'teach', running:false, paused:false,
     token:0, stepIndex:0, pending:new Map(), lastEvent:null};
   const modeDescriptions = {
     teach:'Follow a narrated walkthrough of the source material.',
@@ -19,12 +19,22 @@
   function caption(title,body) { $('caption-title').textContent=title; $('caption-text').textContent=body; }
   function toast(message) {let el=$('toast');el.textContent=message;el.hidden=false;clearTimeout(el._timer);el._timer=setTimeout(()=>el.hidden=true,3400);}
   function speak(text) {
-    if(!state.voice || !('speechSynthesis' in window))return;
+    if (window.SmartPathSpeech) return window.SmartPathSpeech.speak(safeText(text));
+    if (!state.voice || !('speechSynthesis' in window)) return {spoken:false, reason:'unavailable'};
     speechSynthesis.cancel();
-    const utt=new SpeechSynthesisUtterance(safeText(text));utt.lang='en-US';utt.rate=1.04;utt.pitch=1;
+    const utt = new SpeechSynthesisUtterance(safeText(text));
+    utt.lang = 'en-US'; utt.rate = 1.04; utt.pitch = 1;
     speechSynthesis.speak(utt);
+    return {spoken:true, reason:'speaking'};
   }
-  function cancelVoice(){if('speechSynthesis' in window)speechSynthesis.cancel();}
+  function cancelVoice(reason) {
+    if (window.SmartPathSpeech) return window.SmartPathSpeech.cancel(reason || 'stop');
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    return {ok:true, reason: reason || 'stop'};
+  }
+  function allowSpeech(source) {
+    if (window.SmartPathSpeech) window.SmartPathSpeech.allow(source || 'user');
+  }
   function setPageLabel() {
     const viewport=$('pdf-viewport');const pages=[...viewport.querySelectorAll('.pdf-page-wrap')];
     const origin=viewport.getBoundingClientRect().top+20;
@@ -140,7 +150,7 @@
   }
   function pauseLesson(reason='Paused by student'){
     if(!state.running||state.paused)return;
-    state.paused=true;cancelVoice();caption('Lesson paused',`${reason} Press Resume to revalidate and continue.`);
+    state.paused=true;cancelVoice('pause');caption('Lesson paused',`${reason} Press Resume to revalidate and continue.`);
     updateProgressIndicator();emit('lesson_paused',{reason});
   }
   function resumeLesson(){
@@ -148,7 +158,7 @@
     caption('Lesson resumed','Rechecking the current source and graph before continuing.');emit('lesson_resumed');
   }
   function stopLesson(){
-    state.token++;state.running=false;state.paused=false;cancelVoice();$('lesson-strip').hidden=true;
+    state.token++;state.running=false;state.paused=false;cancelVoice('stop');$('lesson-strip').hidden=true;
     caption('Lesson stopped','The AI cursor, queued actions, and narration have been cancelled.');emit('lesson_stopped');
   }
   async function awaitActive(token){
@@ -187,7 +197,7 @@
   }
   async function startLesson(){
     if(state.running){toast('A lesson is already in progress.');return;}
-    state.token++;const token=state.token;state.running=true;state.paused=false;state.stepIndex=0;
+    state.token++;const token=state.token;allowSpeech('lesson');state.running=true;state.paused=false;state.stepIndex=0;
     $('lesson-strip').hidden=false;$('lesson-title').textContent=state.fixture.lesson.title;updateProgressIndicator();
     emit('lesson_started',{runId:token,planId:state.fixture.lesson.planId});
     for(const step of state.fixture.lesson.steps){
@@ -211,7 +221,7 @@
             if(!await awaitActive(token))return;
             continue;
           }
-          state.running=false;state.paused=false;cancelVoice();updateProgressIndicator();
+          state.running=false;state.paused=false;cancelVoice('error');updateProgressIndicator();
           caption('Execution stopped safely',error.message);
           emit('lesson_error',{runId:token,stepId:step.id,error:error.message});return;
         }
@@ -231,6 +241,7 @@
     if(/stop|cancel/.test(lower)){stopLesson();return;}
     if(/pause/.test(lower)){pauseLesson();return;}
     if(/resume|continue/.test(lower)){resumeLesson();return;}
+    allowSpeech('prompt');
     if(/quiz|test me|check understanding/.test(lower)){showQuiz();return;}
     if(/teach|walk me|start lesson|from scratch|ldr/.test(lower)&& !/what does|why does|explain this/.test(lower)){startLesson();return;}
     if(/review|weak|study next/.test(lower)){
@@ -285,9 +296,12 @@
     $('pdf-viewport').addEventListener('scroll',()=>setPageLabel(),{passive:true});
     $('pdf-viewport').addEventListener('wheel',e=>{if(e.isTrusted&&state.running)pauseLesson('You scrolled the document.');},{passive:true});
     $('voice-toggle').addEventListener('click',()=>{
-      state.voice=!state.voice;$('voice-toggle').setAttribute('aria-pressed',String(state.voice));
+      const next = window.SmartPathSpeech ? !window.SmartPathSpeech.isEnabled() : !state.voice;
+      if (window.SmartPathSpeech) window.SmartPathSpeech.setEnabled(next);
+      state.voice=next;$('voice-toggle').setAttribute('aria-pressed',String(state.voice));
       $('voice-toggle').textContent=state.voice?'◖))':'◖';
-      if(!state.voice)cancelVoice();toast(state.voice?'Speech enabled':'Speech muted');
+      $('voice-toggle').title=state.voice?'Spoken narration on. Captions stay visible.':'Spoken narration off. Captions stay visible.';
+      toast(state.voice?'Speech enabled':'Speech muted. Captions stay on.');
     });
     $('mic-button').addEventListener('click',()=>{
       const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
