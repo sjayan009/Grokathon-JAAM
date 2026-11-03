@@ -44,4 +44,24 @@ assert 'debugger' not in manifest.get('permissions',[])
 assert all('localhost' in h or '127.0.0.1' in h for h in manifest['host_permissions'])
 for pg in f['pages']:
  assert (app/pg['image'].lstrip('/')).is_file(),pg['image']
-print('PASS: 4 actual PDF pages, 10 precise source anchors, 5 graph concepts, 4 real relationships, 6 lesson steps, quiz, localhost-only MV3 manifest')
+explanations=json.loads((app/'fixtures'/'explanations.json').read_text())
+assert explanations['schemaVersion']=='explain-1'
+assert explanations['documentId']==f['document']['id']
+assert set(explanations['passages'])==ids
+for anchor in f['anchors']:
+    passage=explanations['passages'][anchor['id']]
+    assert 'rects' not in passage
+    for variant in ('default','simpler','example','relationship'):
+        text=passage[variant]
+        assert isinstance(text,str) and anchor['quote'] in text
+        assert 'prerequisite' not in text.lower()
+    for alias in passage.get('aliases',[]):
+        assert isinstance(alias,str) and len(alias)>=6
+index=(app/'index.html').read_text()
+assert '/speech.js' in index and '/explain.js' in index and '/grok.js' in index
+speech=(app/'speech.js').read_text()
+assert 'smartpath-cancel-speech' in speech and "why === 'stop'" in speech
+grok=(app/'grok.js').read_text()
+assert 'SMARTPATH_GROK_CONFIG' in grok
+assert 'xai-' not in grok and 'sk-' not in grok
+print('PASS: 4 actual PDF pages, 10 precise source anchors, 5 graph concepts, 4 real relationships, 6 lesson steps, quiz, grounded explanation fixture, localhost-only MV3 manifest')

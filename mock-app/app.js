@@ -58,8 +58,10 @@
         b.style.width=`${Math.max(r.width*100,3)}%`;b.style.height=`${Math.max(r.height*100,2)}%`;
         if(state.selectedAnchorId===a.id)b.classList.add('active');
         b.addEventListener('click',event=>{
-          if(event.isTrusted && state.running)pauseLesson('You interacted with the document.');
-          selectAnchor(a.id,true);
+          const user=event.isTrusted;
+          if(user && state.running){pauseLesson('You interacted with the document.');selectAnchor(a.id,false);return;}
+          selectAnchor(a.id,false);
+          if(user)presentExplanationForAnchor(a.id,'default');
         });container.append(b);
       });
       const sticker=document.createElement('span');sticker.className='page-sticker';sticker.textContent=`${page.pageIndex+1} / ${state.fixture.pages.length}`;container.append(sticker);
@@ -75,8 +77,9 @@
     const target=document.querySelector(`[data-anchor-id="${CSS.escape(id)}"]`);
     if(target)target.scrollIntoView({behavior:'smooth',block:'center'});
     $('selected-page-caption').textContent=`Source: page ${a.pageIndex+1}`;
-    if(showExplanation){caption(`Page ${a.pageIndex+1} · ${findNode(a.conceptId)?.label||'Concept'}`,a.quote);}
-    emit('source_selected',{anchorId:id,conceptId:a.conceptId,pageIndex:a.pageIndex});return true;
+    emit('source_selected',{anchorId:id,conceptId:a.conceptId,pageIndex:a.pageIndex});
+    if(showExplanation)presentExplanationForAnchor(id,'default');
+    return true;
   }
   function renderGraph(){
     const canvas=$('graph-nodes');canvas.replaceChildren();const svg=$('graph-links');svg.replaceChildren();
@@ -158,7 +161,7 @@
     caption('Lesson resumed','Rechecking the current source and graph before continuing.');emit('lesson_resumed');
   }
   function stopLesson(){
-    state.token++;state.running=false;state.paused=false;cancelVoice('stop');$('lesson-strip').hidden=true;
+    state.token++;state.running=false;state.paused=false;cancelVoice('stop');setExplainActions(false);$('lesson-strip').hidden=true;
     caption('Lesson stopped','The AI cursor, queued actions, and narration have been cancelled.');emit('lesson_stopped');
   }
   async function awaitActive(token){
@@ -197,7 +200,7 @@
   }
   async function startLesson(){
     if(state.running){toast('A lesson is already in progress.');return;}
-    state.token++;const token=state.token;allowSpeech('lesson');state.running=true;state.paused=false;state.stepIndex=0;
+    state.token++;const token=state.token;allowSpeech('lesson');setExplainActions(false);state.running=true;state.paused=false;state.stepIndex=0;
     $('lesson-strip').hidden=false;$('lesson-title').textContent=state.fixture.lesson.title;updateProgressIndicator();
     emit('lesson_started',{runId:token,planId:state.fixture.lesson.planId});
     for(const step of state.fixture.lesson.steps){
@@ -235,26 +238,100 @@
     if($('quiz-backdrop').hidden)caption('Lesson complete','You can ask for another explanation or review a weak concept.');
     emit('lesson_completed',{runId:token});
   }
+  function speechGeneration(){return window.SmartPathSpeech?window.SmartPathSpeech.generation:null;}
+  function speechWasCancelled(generation){
+    if(!window.SmartPathSpeech||generation==null)return false;
+    return window.SmartPathSpeech.isStopped()||window.SmartPathSpeech.generation!==generation;
+  }
+  function setExplainActions(visible){const bar=$('caption-actions');if(bar)bar.hidden=!visible;}
+  function showExplanation(result){
+    caption(result.captionTitle,result.text);
+    const captions=$('captions');
+    captions.dataset.grounded=String(Boolean(result.grounded));
+    captions.dataset.explanationAnchor=result.anchorId||'';
+    setExplainActions(Boolean(result.grounded));
+    if(result.grounded&&result.anchorId){
+      selectAnchor(result.anchorId,false);
+      const quote=result.evidence&&result.evidence[0]?result.evidence[0].quote:'';
+      $('selected-page-caption').textContent=quote?`Source: ${result.pageLabel} · ${quote}`:`Source: ${result.pageLabel}`;
+    }
+    const spoken=speak(result.speechText);
+    emit('explanation_presented',{grounded:Boolean(result.grounded),anchorId:result.anchorId,conceptId:result.conceptId,pageIndex:result.pageIndex,spoken:Boolean(spoken&&spoken.spoken),speechReason:spoken?spoken.reason:null,source:result.source||'fixture'});
+  }
+  async function maybeUpgradeWithGrok(result,utterance){
+    if(!result||!result.grounded)return result;
+    if(!window.SmartPathGrok||!window.SmartPathGrok.isEnabled())return result;
+    try{
+      const live=await window.SmartPathGrok.explainSelection({
+        documentId:state.fixture.document.id,
+        utterance:utterance||'',
+        anchorId:result.anchorId,
+        quote:result.evidence[0].quote,
+        pageIndex:result.pageIndex,
+        reformulation:result.reformulation
+      });
+      return window.SmartPathExplain.acceptLiveExplanation(live,state.fixture,result)||result;
+    }catch(error){return result;}
+  }
+  async function presentExplanationForAnchor(anchorId,reformulation){
+    if(!window.SmartPathExplain){caption('Explanation unavailable','The explanation planner did not load. Captions stay on this page.');return;}
+    allowSpeech('explain');
+    const generation=speechGeneration();
+    const base=window.SmartPathExplain.explainAnchor({fixture:state.fixture,anchorId,reformulation:reformulation||'default'});
+    const result=await maybeUpgradeWithGrok(base,'');
+    if(speechWasCancelled(generation))return;
+    showExplanation(result);
+  }
+  async function presentUtterance(utterance,reformulation){
+    if(!window.SmartPathExplain){caption('Explanation unavailable','The explanation planner did not load. Type a question or use Teach.');return;}
+    if(state.running)pauseLesson('You asked about a passage.');
+    allowSpeech('explain');
+    const generation=speechGeneration();
+    const base=window.SmartPathExplain.explainUtterance({fixture:state.fixture,utterance,selectedAnchorId:state.selectedAnchorId,reformulation});
+    const result=await maybeUpgradeWithGrok(base,utterance);
+    if(speechWasCancelled(generation))return;
+    showExplanation(result);
+  }
+  function routePrompt(text){
+    if(window.SmartPathExplain)return window.SmartPathExplain.classifyUtterance(text).intent;
+    const lower=text.toLowerCase();
+    if(/stop|cancel/.test(lower))return 'stop';
+    if(/pause/.test(lower))return 'pause';
+    if(/resume|continue/.test(lower))return 'resume';
+    if(/quiz|test me|check understanding/.test(lower))return 'quiz_me';
+    if(/teach|walk me|start lesson|from scratch|ldr/.test(lower)&&!/what does|why does|explain this/.test(lower))return 'teach_concept';
+    if(/review|weak|study next/.test(lower))return 'review_weaknesses';
+    if(/explain|what does|why|how|simpler|example/.test(lower))return 'explain_selection';
+    return 'unsupported';
+  }
   function handlePrompt(text){
     const q=text.trim();if(!q)return;
-    const lower=q.toLowerCase();$('prompt').value='';
-    if(/stop|cancel/.test(lower)){stopLesson();return;}
-    if(/pause/.test(lower)){pauseLesson();return;}
-    if(/resume|continue/.test(lower)){resumeLesson();return;}
-    allowSpeech('prompt');
-    if(/quiz|test me|check understanding/.test(lower)){showQuiz();return;}
-    if(/teach|walk me|start lesson|from scratch|ldr/.test(lower)&& !/what does|why does|explain this/.test(lower)){startLesson();return;}
-    if(/review|weak|study next/.test(lower)){
-      const weak=[...nodes()].sort((a,b)=>a.confidence-b.confidence)[0];focusConcept(weak.id,true);
-      const msg=`Your lowest-confidence concept is ${weak.label} (${Math.round(weak.confidence*100)}%). I moved to its source evidence on page ${weak.pageIndex+1}.`;
-      caption('Guide Mode · Fixture recommendation',msg);speak(msg);return;
+    $('prompt').value='';
+    const decision=window.SmartPathExplain?window.SmartPathExplain.classifyUtterance(q):{intent:routePrompt(q),reformulation:'default'};
+    switch(decision.intent){
+      case 'stop':stopLesson();return;
+      case 'pause':pauseLesson();return;
+      case 'resume':resumeLesson();return;
+      case 'quiz_me':allowSpeech('prompt');showQuiz();return;
+      case 'teach_concept':
+      case 'teach_page':allowSpeech('prompt');startLesson();return;
+      case 'review_weaknesses':{
+        allowSpeech('prompt');
+        const weak=[...nodes()].sort((a,b)=>a.confidence-b.confidence)[0];focusConcept(weak.id,true);
+        const msg=`Your lowest-confidence concept is ${weak.label} (${Math.round(weak.confidence*100)}%). I moved to its source evidence on page ${weak.pageIndex+1}.`;
+        caption('Guide Mode · Fixture recommendation',msg);speak(msg);return;
+      }
+      case 'explain_selection':allowSpeech('prompt');presentUtterance(q,decision.reformulation);return;
+      case 'focus_graph':
+      case 'general_question':
+      case 'unsupported':
+        caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
+        return;
+      default:{
+        caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
+        return;
+      }
     }
-    if(/explain|what does|why|how|simpler|example/.test(lower)){
-      const id=state.selectedAnchorId||'ldr_instruction';selectAnchor(id);
-      const example=id==='pointer_register'||id==='pointer_distinction'?'The register contains x4000, an address. To get 7, you must read Memory[x4000].':'LDR takes the base address in R2, adds the offset, then loads the value stored at that memory address.';
-      caption('Explore Mode · Fixture explanation',example);speak(example);return;
-    }
-    caption('Mock dataset only','This standalone mock demonstrates the SmartPath Live interface with one verified LC-3 lesson. It does not call Grok or generate open-ended AI answers.');
   }
   function commandMessage(event){
     if(event.source!==window || event.origin!==location.origin)return;
@@ -295,6 +372,7 @@
     $('zoom-out').addEventListener('click',()=>changeZoom(-.1));$('zoom-in').addEventListener('click',()=>changeZoom(.1));
     $('pdf-viewport').addEventListener('scroll',()=>setPageLabel(),{passive:true});
     $('pdf-viewport').addEventListener('wheel',e=>{if(e.isTrusted&&state.running)pauseLesson('You scrolled the document.');},{passive:true});
+    ensureExplainActions();
     $('voice-toggle').addEventListener('click',()=>{
       const next = window.SmartPathSpeech ? !window.SmartPathSpeech.isEnabled() : !state.voice;
       if (window.SmartPathSpeech) window.SmartPathSpeech.setEnabled(next);
@@ -303,15 +381,57 @@
       $('voice-toggle').title=state.voice?'Spoken narration on. Captions stay visible.':'Spoken narration off. Captions stay visible.';
       toast(state.voice?'Speech enabled':'Speech muted. Captions stay on.');
     });
-    $('mic-button').addEventListener('click',()=>{
-      const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-      if(!SpeechRecognition){toast('Speech recognition is not available in this browser. Use text input.');return;}
-      const sr=new SpeechRecognition();sr.lang='en-US';sr.interimResults=false;sr.maxAlternatives=1;
-      caption('Listening','Listening for one voice command…');
-      sr.onresult=e=>{const text=e.results[0][0].transcript;$('prompt').value=text;handlePrompt(text);};
-      sr.onerror=e=>toast(`Microphone unavailable: ${e.error}. Use text input.`);
-      try{sr.start();}catch(e){toast('Could not start microphone. Use text input.');}
+    $('mic-button').addEventListener('click',()=>{startMicrophone();});
+  }
+  function micFallback(message){
+    const button=$('mic-button');
+    button.dataset.micState='unavailable';
+    $('prompt').disabled=false;
+    toast(message);
+    caption('Text input ready',message);
+    $('prompt').focus();
+  }
+  async function startMicrophone(){
+    const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SpeechRecognition){micFallback('Speech recognition is not available. Type your question. Spoken explanations still play.');return;}
+    try{
+      if(navigator.permissions&&navigator.permissions.query){
+        const perm=await navigator.permissions.query({name:'microphone'});
+        if(perm.state==='denied'){micFallback('Microphone permission is blocked. Type your question. Spoken explanations still play.');return;}
+      }
+    }catch(error){/* Some browsers reject the microphone permission name. Recognition still reports denial. */}
+    const sr=new SpeechRecognition();sr.lang='en-US';sr.interimResults=false;sr.maxAlternatives=1;
+    $('mic-button').dataset.micState='listening';
+    caption('Listening','Listening for one voice command. Text input still works if this fails.');
+    sr.onresult=event=>{
+      $('mic-button').dataset.micState='idle';
+      const text=event.results[0][0].transcript;$('prompt').value=text;handlePrompt(text);
+    };
+    sr.onerror=event=>{
+      $('mic-button').dataset.micState='denied';
+      const denied=event.error==='not-allowed'||event.error==='service-not-allowed'||event.error==='audio-capture';
+      micFallback(denied?'Microphone permission failed. Type your question. Spoken explanations still play.':`Microphone unavailable (${event.error}). Type your question. Spoken explanations still play.`);
+    };
+    try{sr.start();}catch(error){micFallback('Could not start the microphone. Type your question. Spoken explanations still play.');}
+  }
+  function ensureExplainActions(){
+    if($('caption-actions'))return;
+    const host=$('caption-text').parentElement;
+    const bar=document.createElement('div');bar.id='caption-actions';bar.hidden=true;
+    [['simpler','Simpler'],['example','Example'],['relationship','Relationship']].forEach(([id,label])=>{
+      const button=document.createElement('button');button.type='button';button.dataset.reformulation=id;button.textContent=label;
+      button.addEventListener('click',()=>{if(state.selectedAnchorId)presentExplanationForAnchor(state.selectedAnchorId,id);});
+      bar.append(button);
     });
+    host.append(bar);
+  }
+  async function attachExplanations(fixture){
+    if(fixture.explanations&&fixture.explanations.passages)return;
+    const response=await fetch('/fixtures/explanations.json',{cache:'no-store'});
+    if(!response.ok)throw new Error(`Explanation fixture HTTP ${response.status}`);
+    const explanations=await response.json();
+    if(explanations.documentId!==fixture.document.id)throw new Error('Explanation fixture document does not match');
+    fixture.explanations=explanations;
   }
   function changeZoom(delta){state.zoom=Math.max(.55,Math.min(1.45,Math.round((state.zoom+delta)*100)/100));$('zoom-label').textContent=`${Math.round(state.zoom*100)}%`;renderPages();if(state.selectedAnchorId)selectAnchor(state.selectedAnchorId);}
   async function init(){
@@ -320,6 +440,7 @@
       if(!response.ok)throw new Error(`Fixture HTTP ${response.status}`);
       state.fixture=await response.json();
       if(!state.fixture.pages.length || !state.fixture.anchors.length)throw new Error('Mock document is incomplete');
+      try{await attachExplanations(state.fixture);}catch(error){console.error(error);caption('Explanations unavailable',error.message);}
       renderPages();renderGraph();renderProgress();setupEvents();
       emit('app_ready',{documentId:state.fixture.document.id});
       setTimeout(()=>{if(!state.extensionOnline){$('extension-status').textContent='Extension not detected · app-only mode';}},1200);
