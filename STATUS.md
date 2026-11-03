@@ -12,8 +12,6 @@ Shared log so every agent and teammate knows what everyone else is doing.
 ## In progress
 | Who (agent/person) | Task | Branch | Started | Notes |
 |---|---|---|---|---|
-| Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | `cursor/pdf-workspace-grounding-4015` | 2026-11-03 | Claimed. Building page-image reader, exact hotspot geometry, and `PdfViewerApi` (`scrollToAnchor`, `highlightAnchor`, `clearHighlight`, `getSelectionContext`, `getVisiblePage`). Will not change extension/, lesson copy, or graph behavior. |
-| Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | `cursor/pdf-workspace-grounding-4015` | 2026-11-03 | 2026-11-03: `window.PdfViewerApi` is in `mock-app/pdf-reader.js` (see `PDF_VIEWER_API.md`). One `[data-anchor-id]` per anchor; highlight box is `[data-highlight-for]`. Verified at 75/100/150% zoom and while scrolling. |
 
 ## Blocked / needs help
 | Who | Task | Blocked on |
@@ -25,6 +23,7 @@ Shared log so every agent and teammate knows what everyone else is doing.
 | Engineer D (Graph, Learning UX & QA) | F06 graph node sync; headless P0 / §18.8 gate | https://github.com/sjayan009/Grokathon-JAAM/pull/3 | 2026-11-03 |
 | Engineer C (AI, Evidence & Backend) | F05 selected-passage explanation; F08 text input + spoken output | https://github.com/sjayan009/Grokathon-JAAM/pull/4 | 2026-11-03 |
 | Engineer A (Extension & Cursor) | F01 study-tab detect, F02 second cursor, F07 Start/Pause/Stop | https://github.com/sjayan009/Grokathon-JAAM/pull/5 | 2026-11-03 |
+| Engineer B (PDF Workspace & Grounding) | F03 mock PDF reader + F04 source-anchored highlights | https://github.com/sjayan009/Grokathon-JAAM/pull/2 | 2026-11-03 |
 
 ## Notes / handoffs
 - **2026-11-03T01:50Z — Lane A done:** https://github.com/sjayan009/Grokathon-JAAM/pull/5 . F01/F02/F07 are in `extension/`. Message contract unchanged: `action_request` `{kind,targetId}` → `action_result` `{requestId,ok,error?}`. Cursor aims from the live DOM only. Stop/Pause dispatch `smartpath-cancel-speech` (`reason: 'stop'|'pause'`) and still post `command`. Rough edges: content script is the prebuilt `content-bundle.js` (Chrome here rejected module content scripts); Google Chrome stable may ignore `--load-extension` (load unpacked from `chrome://extensions` still works); `tools/smoke_test.py` was not run (no Playwright / `/usr/bin/chromium`). `python3 tools/validate_mock.py` passed.
@@ -35,6 +34,6 @@ Shared log so every agent and teammate knows what everyone else is doing.
 - **Merge notes for B and C:** Keep `<script src="/graph.js" defer>` before `app.js` (alongside `pdf-reader.js` and `speech.js`). If `selectAnchor` moves into `PdfViewerApi`, keep the `focusConcept(anchor.conceptId, {selectSource:false})` call when the click is an explanation. This branch does not adopt Lane C's default-on TTS or Lane B's reader. `python3 tools/acceptance_gate.py` is the headless gate (port 8765). It does not load the unpacked extension, so cursor-follow and live extension detection are SKIP.
 - **2026-11-03T01:50Z — Lane C rebased onto Lane D:** Kept `graph.js` before `app.js` and `focusConcept(..., {selectSource:false})` on passage click and explanation. PR #4. Unknown topics still do not draw a highlight. Live Grok stays off.
 - **2026-11-03T01:52Z — Lane C merged Lane A (#5):** No app.js conflict. Stop still uses `smartpath-cancel-speech` plus the existing `command: stop` relay. PR #4.
-- **2026-11-03 — Engineer B (PDF):** `PdfViewerApi = {scrollToAnchor, highlightAnchor, clearHighlight, getSelectionContext, getVisiblePage}` plus `measureAnchor`, `setZoom`, `scrollToPage`. Call `highlightAnchor(anchorId)` with a fixture id. Unknown ids return `{ok:false}` and do not draw. Rects are page fractions, origin top-left, y down. `#pdf-viewport` is the only scroller for source jumps (`data-zoom`, `data-visible-page`, `data-grounding`, `data-layout-epoch`). Do not put `data-concept-id` on PDF controls. `source_selected` postMessage is unchanged. `tools/smoke_test.py` falls back to Google Chrome when `/usr/bin/chromium` is absent. Grounding test: `python3 tools/test_pdf_grounding.py` (port 5174).
+- **2026-11-03 — Engineer B (PDF):** `PdfViewerApi` highlight stays page-relative. Passage clicks call `presentExplanationForAnchor` and `SmartPathGraph.focusConcept(anchor.conceptId)`. `graph.js` stays before `app.js`. PNG check allows small raster drift. `smoke_test.py` uses `CHROME_PATH` or macOS Chrome. Rough edges: raster only, fixture ids only, zoom steps 75/100/125/150/200.
 
 _Last synced from agent branches: 2026-11-02 08:41 PM ET_
