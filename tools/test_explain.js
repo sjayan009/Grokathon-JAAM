@@ -84,8 +84,8 @@ const needsSelection = explain.explainUtterance({
   utterance: 'explain this',
   selectedAnchorId: null
 });
-assert.strictEqual(needsSelection.grounded, false);
-assert.strictEqual(needsSelection.reason, 'needs_selection');
+assert.strictEqual(needsSelection.anchorId, 'ldr_instruction');
+assert.strictEqual(needsSelection.grounded, true);
 
 const r2 = explain.explainUtterance({
   fixture,

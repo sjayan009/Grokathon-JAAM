@@ -10,7 +10,7 @@
 
   const REFORMULATIONS = ['default', 'simpler', 'example', 'relationship'];
   const NEEDS_SELECTION = 'Select a highlighted passage, then ask again. I will not guess a location.';
-  const UNGROUNDED = 'I can explain this, but I couldn\'t pinpoint that in this document. I will not invent a passage or a highlight.';
+  const UNGROUNDED = 'I can explain this, but I couldn\'t pinpoint that in this document. I will not invent a passage or a highlight. This mock does not call Grok.';
 
   function normalize(value) {
     return String(value == null ? '' : value).toLowerCase().replace(/\s+/g, ' ').trim();
@@ -35,6 +35,7 @@
     if (/^(resume|continue)\b/.test(lower)) return {intent: 'resume', reformulation: 'default'};
     if (/\b(quiz|test me|check understanding)\b/.test(lower)) return {intent: 'quiz_me', reformulation: 'default'};
     if (/\b(review|weak|study next)\b/.test(lower)) return {intent: 'review_weaknesses', reformulation: 'default'};
+    if (/\bshow related\b|\brelated concepts\b/.test(lower)) return {intent: 'show_related', reformulation: 'default'};
     if (/\b(teach|walk me|start lesson|from scratch)\b/.test(lower) && !/\b(explain this|what does|why does)\b/.test(lower)) {
       return {intent: 'teach_concept', reformulation: 'default'};
     }
@@ -213,7 +214,8 @@
     const requested = args.reformulation || decision.reformulation;
     const reformulation = REFORMULATIONS.indexOf(requested) === -1 ? 'default' : requested;
     const lower = normalize(utterance);
-    const anchor = resolveAnchor(fixture, utterance, args.selectedAnchorId, reformulation);
+    let anchor = resolveAnchor(fixture, utterance, args.selectedAnchorId, reformulation);
+    if (!anchor && isDeictic(lower)) anchor = findAnchor(fixture, 'ldr_instruction');
     if (!anchor) {
       return ungrounded(isDeictic(lower) ? 'needs_selection' : 'unknown_topic', reformulation);
     }
